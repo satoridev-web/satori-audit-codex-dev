@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin inventory service placeholder.
+ * Plugin inventory service.
  *
  * @package Satori_Audit
  */
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class Satori_Audit_Plugins_Service {
     /**
-     * Retrieve the current plugins installed on the site.
+     * Retrieve the current plugins installed on the site, keyed by slug.
      *
      * @return array
      */
@@ -27,7 +27,36 @@ class Satori_Audit_Plugins_Service {
             require_once ABSPATH . 'wp-admin/includes/plugin.php';
         }
 
-        return get_plugins();
+        $plugins      = get_plugins();
+        $active       = (array) get_option( 'active_plugins', [] );
+        $normalized   = [];
+        $current_time = current_time( 'mysql', true );
+
+        foreach ( $plugins as $file => $data ) {
+            $slug = $this->normalise_slug( $file );
+
+            $normalized[ $slug ] = [
+                'plugin_slug'        => $slug,
+                'plugin_name'        => $data['Name'] ?? $slug,
+                'plugin_description' => $data['Description'] ?? '',
+                'version_current'    => $data['Version'] ?? '',
+                'is_active'          => in_array( $file, $active, true ) ? 1 : 0,
+                'last_checked'       => $current_time,
+            ];
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * Normalise a plugin file path into a slug.
+     *
+     * @param string $plugin_file Plugin file path.
+     */
+    private function normalise_slug( string $plugin_file ): string {
+        $parts = explode( '/', $plugin_file );
+
+        return sanitize_title( $parts[0] ?? $plugin_file );
     }
 
     /**
@@ -52,13 +81,14 @@ class Satori_Audit_Plugins_Service {
                 continue;
             }
 
-            $previous_version = $previous[ $slug ]['Version'] ?? '';
-            $current_version  = $data['Version'] ?? '';
+            $previous_version = $previous[ $slug ]['version_current'] ?? '';
+            $current_version  = $data['version_current'] ?? '';
 
             if ( $previous_version !== $current_version ) {
                 $diff['updated'][ $slug ] = [
                     'from' => $previous_version,
                     'to'   => $current_version,
+                    'data' => $data,
                 ];
             } else {
                 $diff['unchanged'][ $slug ] = $data;

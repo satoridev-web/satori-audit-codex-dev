@@ -1,8 +1,109 @@
-/* Placeholder styles for SATORI Audit admin screens. */
+/* SATORI Audit admin styles */
+.satori-audit-wrap .satori-audit-toolbar form {
+    display: inline-block;
+    margin-right: 8px;
+}
 
-.satori-audit-placeholder {
+.satori-audit-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-top: 16px;
+}
+
+.satori-audit-panel {
     background: #fff;
-    border: 1px dashed #c3c4c7;
     padding: 16px;
+    border: 1px solid #ccd0d4;
+}
+
+.satori-audit-fieldset {
+    margin-bottom: 20px;
+}
+
+.satori-audit-fieldset label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.satori-audit-fieldset textarea,
+.satori-audit-fieldset input[type="text"] {
+    width: 100%;
+}
+
+.satori-audit-table textarea {
+    width: 100%;
+}
+
+.satori-audit-table .empty {
+    text-align: center;
+    color: #666;
+}
+
+.satori-audit-table td.center {
+    text-align: center;
+}
+
+.satori-audit-preview {
+    font-family: Arial, sans-serif;
+}
+
+.satori-audit-header {
+    display: flex;
+    justify-content: space-between;
+    border-bottom: 2px solid #111;
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+}
+
+.satori-audit-overview .satori-audit-columns {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+.satori-audit-summary .satori-audit-counters {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    gap: 10px;
+}
+
+.satori-audit-summary .legend {
+    margin-top: 8px;
+    color: #555;
+}
+
+.satori-audit-preview table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+.satori-audit-preview th,
+.satori-audit-preview td {
+    border: 1px solid #dcdcde;
+    padding: 8px;
+    vertical-align: top;
+}
+
+.satori-audit-preview th {
+    background: #f6f7f7;
+    text-transform: uppercase;
+    font-size: 12px;
+}
+
+.satori-audit-preview .status-new { color: #1e8cbe; }
+.satori-audit-preview .status-updated { color: #d54e21; }
+.satori-audit-preview .status-deleted { color: #444; }
+.satori-audit-preview .status-unchanged { color: #46b450; }
+
+.satori-audit-preview .muted { color: #666; font-size: 12px; }
+
+.satori-audit-footer {
     margin-top: 12px;
+    text-align: center;
+    color: #444;
 }

@@ -126,7 +126,7 @@ function satori_audit_boot(): void {
         return;
     }
 
-    \Satori_Audit\Includes\Satori_Audit_Plugin::instance();
+    \Satori_Audit\Includes\Satori_Audit_Plugin::init();
 }
 
 if ( satori_audit_is_compatible() ) {

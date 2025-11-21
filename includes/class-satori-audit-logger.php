@@ -18,15 +18,30 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class Satori_Audit_Logger {
     /**
-     * Write a message to the WordPress debug log.
+     * Write a message to the WordPress debug log and a plugin log file when available.
      *
      * @param string $message Message to log.
      * @param array  $context Optional context data.
      */
     public static function log( string $message, array $context = [] ): void {
+        $line = $context ? sprintf( '%s %s', $message, wp_json_encode( $context ) ) : $message;
+
         if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-            $line = $context ? sprintf( '%s %s', $message, wp_json_encode( $context ) ) : $message;
             error_log( '[SATORI Audit] ' . $line );
+        }
+
+        $upload_dir = wp_upload_dir();
+
+        if ( ! empty( $upload_dir['basedir'] ) ) {
+            $dir = trailingslashit( $upload_dir['basedir'] ) . 'satori-audit-logs/';
+
+            if ( ! file_exists( $dir ) ) {
+                wp_mkdir_p( $dir );
+            }
+
+            $file = $dir . 'satori-audit.log';
+            $entry = sprintf( "%s %s\n", gmdate( 'c' ), '[SATORI Audit] ' . $line );
+            file_put_contents( $file, $entry, FILE_APPEND );
         }
     }
 }
