@@ -1,0 +1,8 @@
+/* Placeholder styles for SATORI Audit admin screens. */
+
+.satori-audit-placeholder {
+    background: #fff;
+    border: 1px dashed #c3c4c7;
+    padding: 16px;
+    margin-top: 12px;
+}

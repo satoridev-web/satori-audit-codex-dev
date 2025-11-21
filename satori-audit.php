@@ -12,7 +12,7 @@
 declare( strict_types=1 );
 
 if ( ! defined( 'ABSPATH' ) ) {
-exit;
+    exit;
 }
 
 /**
@@ -67,6 +67,15 @@ function satori_audit_autoload( string $class ): void {
 }
 
 spl_autoload_register( 'satori_audit_autoload' );
+
+register_activation_hook(
+    SATORI_AUDIT_PLUGIN_FILE,
+    static function (): void {
+        if ( class_exists( '\\Satori_Audit\\Includes\\Satori_Audit_Plugin' ) ) {
+            \Satori_Audit\Includes\Satori_Audit_Plugin::activate();
+        }
+    }
+);
 
 /**
  * Add an admin notice for environment issues.
