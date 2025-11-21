@@ -1,134 +1,153 @@
 <?php
 /**
- * Plugin Name: SATORI – Audit & Reports
- * Plugin URI:  https://satori.com.au/
- * Description: SATORI Audit plugin scaffolding – built via Codex. Generates monthly service reports for client sites.
- * Version:     0.0.1-dev
- * Author:      Satori Graphics Pty Ltd
- * Author URI:  https://satori.com.au/
- * Text Domain: satori-audit
+ * Plugin Name:       SATORI – Audit & Reports
+ * Plugin URI:        https://satori.com.au/
+ * Description:       Generates monthly audit reports for WordPress sites, including plugin inventory, changes, and service logs.
+ * Version:           0.1.0
+ * Author:            Satori Graphics Pty Ltd
+ * Author URI:        https://satori.com.au/
+ * Text Domain:       satori-audit
+ * Domain Path:       /languages
+ *
+ * @package Satori_Audit
  */
-
-declare( strict_types=1 );
 
 if ( ! defined( 'ABSPATH' ) ) {
-    exit;
+	exit; // Prevent direct access.
 }
 
-/**
- * Plugin constants.
- */
-define( 'SATORI_AUDIT_VERSION', '0.0.1-dev' );
-define( 'SATORI_AUDIT_MIN_PHP', '8.0' );
-define( 'SATORI_AUDIT_MIN_WP', '6.1' );
-define( 'SATORI_AUDIT_PLUGIN_FILE', __FILE__ );
-define( 'SATORI_AUDIT_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
-define( 'SATORI_AUDIT_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
-define( 'SATORI_AUDIT_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
-define( 'SATORI_AUDIT_NAMESPACE', 'Satori_Audit\\' );
+/* -------------------------------------------------
+ * Core plugin constants
+ * -------------------------------------------------*/
 
-/**
- * Autoloader for plugin classes using the Satori_Audit namespace.
- *
- * Converts class names to lowercase, hyphenated filenames with a `class-` prefix
- * and maps namespaces to the `admin/` and `includes/` directories.
- *
- * @param string $class Fully-qualified class name.
- */
-function satori_audit_autoload( string $class ): void {
-    $prefix = SATORI_AUDIT_NAMESPACE;
-
-    if ( 0 !== strpos( $class, $prefix ) ) {
-        return;
-    }
-
-    $relative_class = substr( $class, strlen( $prefix ) );
-    $parts          = explode( '\\', $relative_class );
-    $file_name_part = array_pop( $parts );
-    $path_parts     = array_map(
-        static function ( string $segment ): string {
-            return str_replace( '_', '-', strtolower( $segment ) );
-        },
-        $parts
-    );
-
-    $file_name = 'class-' . str_replace( '_', '-', strtolower( $file_name_part ) ) . '.php';
-    $sub_path  = implode( '/', $path_parts );
-    $locations = [ SATORI_AUDIT_PLUGIN_DIR . 'includes/', SATORI_AUDIT_PLUGIN_DIR . 'admin/' ];
-
-    foreach ( $locations as $base ) {
-        $path = $base . ( $sub_path ? $sub_path . '/' : '' ) . $file_name;
-
-        if ( file_exists( $path ) ) {
-            require_once $path;
-            return;
-        }
-    }
+if ( ! defined( 'SATORI_AUDIT_VERSION' ) ) {
+	define( 'SATORI_AUDIT_VERSION', '0.1.0' );
 }
 
-spl_autoload_register( 'satori_audit_autoload' );
+if ( ! defined( 'SATORI_AUDIT_FILE' ) ) {
+	define( 'SATORI_AUDIT_FILE', __FILE__ );
+}
 
-register_activation_hook(
-    SATORI_AUDIT_PLUGIN_FILE,
-    static function (): void {
-        if ( class_exists( '\\Satori_Audit\\Includes\\Satori_Audit_Plugin' ) ) {
-            \Satori_Audit\Includes\Satori_Audit_Plugin::activate();
-        }
-    }
+if ( ! defined( 'SATORI_AUDIT_PATH' ) ) {
+	define( 'SATORI_AUDIT_PATH', plugin_dir_path( __FILE__ ) );
+}
+
+if ( ! defined( 'SATORI_AUDIT_URL' ) ) {
+	define( 'SATORI_AUDIT_URL', plugin_dir_url( __FILE__ ) );
+}
+
+/* -------------------------------------------------
+ * PSR-4–style autoloader
+ * -------------------------------------------------
+ *
+ * Maps the Satori_Audit\* namespace to:
+ *  - /includes/class-satori-audit-*.php
+ *  - /admin/class-satori-audit-*.php
+ *  - /admin/screens/class-satori-audit-*.php
+ *
+ * Example:
+ *  Satori_Audit\Plugin           → includes/class-satori-audit-plugin.php
+ *  Satori_Audit\Cpt              → includes/class-satori-audit-cpt.php
+ *  Satori_Audit\Tables           → includes/class-satori-audit-tables.php
+ *  Satori_Audit\Admin            → admin/class-satori-audit-admin.php
+ *  Satori_Audit\Screen_Dashboard → admin/screens/class-satori-audit-screen-dashboard.php
+ */
+
+spl_autoload_register(
+	/**
+	 * Autoload Satori_Audit classes.
+	 *
+	 * @param string $class Fully-qualified class name.
+	 * @return void
+	 */
+	function ( $class ) {
+
+		$prefix = 'Satori_Audit\\';
+
+		// Not our namespace, bail early.
+		if ( 0 !== strpos( $class, $prefix ) ) {
+			return;
+		}
+
+		// Strip namespace prefix.
+		$relative = str_replace( $prefix, '', $class );
+
+		// Convert namespace separators to underscores.
+		$relative = str_replace( '\\', '_', $relative );
+
+		// Convert CamelCase / underscores to lowercase-hyphenated file suffix.
+		//   Plugin           → plugin
+		//   Cpt              → cpt
+		//   Plugins_Service  → plugins-service
+		//   Screen_Dashboard → screen-dashboard
+		$file_suffix = strtolower( str_replace( '_', '-', $relative ) );
+
+		$files_to_try = array(
+			SATORI_AUDIT_PATH . 'includes/class-satori-audit-' . $file_suffix . '.php',
+			SATORI_AUDIT_PATH . 'admin/class-satori-audit-' . $file_suffix . '.php',
+			SATORI_AUDIT_PATH . 'admin/screens/class-satori-audit-' . $file_suffix . '.php',
+		);
+
+		foreach ( $files_to_try as $file ) {
+			if ( is_readable( $file ) ) {
+				require_once $file;
+				return;
+			}
+		}
+	}
 );
 
+/* -------------------------------------------------
+ * Activation hook
+ * -------------------------------------------------*/
+
 /**
- * Add an admin notice for environment issues.
+ * Run tasks on plugin activation.
  *
- * @param string $message Message to display.
+ * This is intentionally small; the heavy lifting lives
+ * in Satori_Audit\Plugin::activate() if present.
  */
-function satori_audit_admin_notice( string $message ): void {
-    if ( ! function_exists( 'add_action' ) ) {
-        return;
-    }
-
-    add_action(
-        'admin_notices',
-        static function () use ( $message ): void {
-            echo '<div class="notice notice-error"><p>' . esc_html( $message ) . '</p></div>';
-        }
-    );
+function satori_audit_activate() {
+	if ( class_exists( 'Satori_Audit\\Plugin' ) && method_exists( 'Satori_Audit\\Plugin', 'activate' ) ) {
+		\Satori_Audit\Plugin::activate();
+	}
 }
 
-/**
- * Determine if the current environment meets plugin requirements.
- *
- * @return bool
- */
-function satori_audit_is_compatible(): bool {
-    if ( version_compare( PHP_VERSION, SATORI_AUDIT_MIN_PHP, '<' ) ) {
-        satori_audit_admin_notice( sprintf( 'SATORI Audit requires PHP %s or newer.', SATORI_AUDIT_MIN_PHP ) );
-        return false;
-    }
+register_activation_hook( __FILE__, 'satori_audit_activate' );
 
-    global $wp_version;
-    $wordpress_version = $wp_version ?? ( function_exists( 'get_bloginfo' ) ? (string) get_bloginfo( 'version' ) : '0' );
+/* -------------------------------------------------
+ * Bootstrap plugin on plugins_loaded
+ * -------------------------------------------------*/
 
-    if ( version_compare( $wordpress_version, SATORI_AUDIT_MIN_WP, '<' ) ) {
-        satori_audit_admin_notice( sprintf( 'SATORI Audit requires WordPress %s or newer.', SATORI_AUDIT_MIN_WP ) );
-        return false;
-    }
+add_action(
+	'plugins_loaded',
+	static function () {
+		// Load translations.
+		load_plugin_textdomain(
+			'satori-audit',
+			false,
+			dirname( plugin_basename( __FILE__ ) ) . '/languages'
+		);
 
-    return true;
-}
+		// Ensure the core plugin class exists.
+		if ( class_exists( 'Satori_Audit\\Plugin' ) ) {
+			\Satori_Audit\Plugin::init();
+			return;
+		}
 
-/**
- * Boot the main plugin class.
- */
-function satori_audit_boot(): void {
-    if ( ! class_exists( '\\Satori_Audit\\Includes\\Satori_Audit_Plugin' ) ) {
-        satori_audit_admin_notice( 'SATORI Audit could not locate the plugin bootstrap class.' );
-        return;
-    }
-
-    \Satori_Audit\Includes\Satori_Audit_Plugin::init();
-}
-
-if ( satori_audit_is_compatible() ) {
-    add_action( 'plugins_loaded', 'satori_audit_boot' );
-}
+		// Fallback admin notice if the bootstrap class cannot be found.
+		if ( is_admin() ) {
+			add_action(
+				'admin_notices',
+				static function () {
+					echo '<div class="notice notice-error"><p>';
+					echo esc_html__(
+						'SATORI Audit could not locate the plugin bootstrap class (Satori_Audit\\Plugin). Please check the plugin files.',
+						'satori-audit'
+					);
+					echo '</p></div>';
+				}
+			);
+		}
+	}
+);

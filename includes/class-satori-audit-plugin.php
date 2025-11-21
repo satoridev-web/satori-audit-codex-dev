@@ -1,167 +1,121 @@
 <?php
 /**
- * Main plugin bootstrap class.
+ * Core plugin orchestrator for SATORI Audit.
  *
  * @package Satori_Audit
  */
 
-declare( strict_types=1 );
-
-namespace Satori_Audit\Includes;
-
-use Satori_Audit\Admin\Satori_Audit_Admin;
+namespace Satori_Audit;
 
 if ( ! defined( 'ABSPATH' ) ) {
-    exit;
+	exit;
 }
 
 /**
- * Primary plugin controller handling hooks for CPTs, tables, admin screens, and settings.
+ * Main plugin class.
+ *
+ * Responsible for wiring up CPTs, tables, admin UI, reports,
+ * automation, and any other core services.
  */
-class Satori_Audit_Plugin {
-    /**
-     * Singleton instance.
-     *
-     * @var Satori_Audit_Plugin|null
-     */
-    private static ?Satori_Audit_Plugin $instance = null;
+class Plugin {
 
-    /**
-     * Retrieve the singleton instance.
-     */
-    public static function instance(): self {
-        if ( null === self::$instance ) {
-            self::$instance = new self();
-        }
+	/**
+	 * Singleton-like flag.
+	 *
+	 * @var bool
+	 */
+	protected static $booted = false;
 
-        return self::$instance;
-    }
+	/**
+	 * Initialise the plugin.
+	 *
+	 * Called from satori-audit.php on plugins_loaded.
+	 *
+	 * @return void
+	 */
+	public static function init() {
+		if ( true === self::$booted ) {
+			return;
+		}
 
-    /**
-     * Public init entry point for Plugin::init() requirement.
-     */
-    public static function init(): self {
-        return self::instance();
-    }
+		self::$booted = true;
 
-    /**
-     * Hook into WordPress on construction.
-     */
-    private function __construct() {
-        new Satori_Audit_Cpt();
-        new Satori_Audit_Tables();
-        new Satori_Audit_Admin();
-        new Satori_Audit_Reports();
-        new Satori_Audit_Plugins_Service();
-        new Satori_Audit_Automation();
+		$instance = new self();
+		$instance->hooks();
+	}
 
-        add_action( 'plugins_loaded', [ $this, 'load_textdomain' ] );
-        add_action( 'init', [ $this, 'register_custom_post_types' ] );
-        add_action( 'init', [ $this, 'register_database_tables' ] );
-        add_action( 'admin_menu', [ $this, 'register_admin_screens' ] );
-        add_action( 'admin_init', [ $this, 'register_settings' ] );
-    }
+	/**
+	 * Plugin activation tasks.
+	 *
+	 * Called from the register_activation_hook in satori-audit.php.
+	 *
+	 * @return void
+	 */
+	public static function activate() {
+		// Ensure CPT and tables are registered on activation.
+		if ( class_exists( Cpt::class ) && method_exists( Cpt::class, 'register' ) ) {
+			Cpt::register();
+		}
 
-    /**
-     * Load translations for the plugin.
-     */
-    public function load_textdomain(): void {
-        load_plugin_textdomain( 'satori-audit', false, dirname( SATORI_AUDIT_PLUGIN_BASENAME ) . '/languages' );
-    }
+		if ( class_exists( Tables::class ) && method_exists( Tables::class, 'install' ) ) {
+			Tables::install();
+		}
 
-    /**
-     * Register custom post types related to audit data.
-     */
-    public function register_custom_post_types(): void {
-        do_action( 'satori_audit_load_custom_post_types' );
-    }
+		// Flush rewrite rules if CPT exists.
+		if ( function_exists( 'flush_rewrite_rules' ) ) {
+			flush_rewrite_rules();
+		}
+	}
 
-    /**
-     * Register or bootstrap any database tables used by the plugin.
-     */
-    public function register_database_tables(): void {
-        do_action( 'satori_audit_register_tables' );
-    }
+	/**
+	 * Attach hooks for the runtime lifecycle.
+	 *
+	 * @return void
+	 */
+	protected function hooks() {
+		// Register CPT and related structures.
+		add_action(
+			'init',
+			static function () {
+				if ( class_exists( Cpt::class ) && method_exists( Cpt::class, 'register' ) ) {
+					Cpt::register();
+				}
+			}
+		);
 
-    /**
-     * Register admin menus and screens.
-     */
-    public function register_admin_screens(): void {
-        do_action( 'satori_audit_register_admin_screens' );
-    }
+		// Ensure DB tables are available.
+		add_action(
+			'init',
+			static function () {
+				if ( class_exists( Tables::class ) && method_exists( Tables::class, 'maybe_upgrade' ) ) {
+					Tables::maybe_upgrade();
+				}
+			}
+		);
 
-    /**
-     * Register settings and related integrations.
-     */
-    public function register_settings(): void {
-        do_action( 'satori_audit_register_settings' );
-    }
+		// Admin UI (menus + screens).
+		if ( is_admin() && class_exists( Admin::class ) && method_exists( Admin::class, 'init' ) ) {
+			Admin::init();
+		}
 
-    /**
-     * Activation callback.
-     */
-    public static function activate(): void {
-        Satori_Audit_Tables::activate();
-        update_option( 'satori_audit_settings', self::get_default_settings() );
-    }
+		// Reports engine.
+		add_action(
+			'init',
+			static function () {
+				if ( class_exists( Reports::class ) && method_exists( Reports::class, 'init' ) ) {
+					Reports::init();
+				}
+			}
+		);
 
-    /**
-     * Retrieve stored settings with defaults.
-     *
-     * @return array
-     */
-    public static function get_settings(): array {
-        $saved    = get_option( 'satori_audit_settings', [] );
-        $defaults = self::get_default_settings();
-
-        return wp_parse_args( $saved, $defaults );
-    }
-
-    /**
-     * Default settings structure covering all tabs.
-     *
-     * @return array
-     */
-    public static function get_default_settings(): array {
-        return [
-            // Service Details.
-            'client_name'        => '',
-            'site_name'          => '',
-            'site_url'           => '',
-            'managed_by'         => '',
-            'start_date'         => '',
-            'service_date'       => '',
-            'technician_name'    => '',
-            'technician_email'   => '',
-            'technician_phone'   => '',
-            'logo_id'            => '',
-            // Notifications.
-            'from_email'         => get_bloginfo( 'admin_email' ),
-            'default_recipients' => '',
-            'webhook_url'        => '',
-            'suppress_wp_emails' => 0,
-            // Safelist.
-            'enforce_safelist'   => 0,
-            'safelist'           => '',
-            // Access Control.
-            'cap_manage'         => 'manage_options',
-            'cap_export'         => 'manage_options',
-            'cap_settings'       => 'manage_options',
-            'admin_email'        => get_bloginfo( 'admin_email' ),
-            // Automation.
-            'enable_cron'        => 0,
-            'cron_day'           => '1',
-            'cron_time'          => '03:00',
-            'retain_months'      => '0',
-            // Display & Output.
-            'show_security'      => 1,
-            'show_known_issues'  => 1,
-            'pdf_page_size'      => 'A4',
-            'pdf_orientation'    => 'portrait',
-            'footer_text'        => '',
-            // PDF Diagnostics.
-            'pdf_engine'         => '',
-            'pdf_path'           => '',
-        ];
-    }
+		// Automation (cron etc).
+		add_action(
+			'init',
+			static function () {
+				if ( class_exists( Automation::class ) && method_exists( Automation::class, 'init' ) ) {
+					Automation::init();
+				}
+			}
+		);
+	}
 }
