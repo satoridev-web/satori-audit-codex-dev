@@ -7,7 +7,7 @@
 
 declare( strict_types=1 );
 
-namespace Satori_Audit\Includes;
+namespace Satori_Audit;
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
@@ -16,19 +16,19 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Handle registration of the audit report CPT.
  */
-class Satori_Audit_Cpt {
-    /**
-     * Constructor.
-     */
-    public function __construct() {
-        add_action( 'satori_audit_load_custom_post_types', [ $this, 'register_report_cpt' ] );
-    }
-
+class Cpt {
     /**
      * Register the audit report custom post type.
+     *
+     * @return void
      */
-    public function register_report_cpt(): void {
-        $labels = [
+    public static function register(): void {
+        // Avoid duplicate registration during the same request.
+        if ( post_type_exists( 'satori_audit_report' ) ) {
+            return;
+        }
+
+        $labels = array(
             'name'               => _x( 'Audit Reports', 'post type general name', 'satori-audit' ),
             'singular_name'      => _x( 'Audit Report', 'post type singular name', 'satori-audit' ),
             'menu_name'          => _x( 'Audit Reports', 'admin menu', 'satori-audit' ),
@@ -42,19 +42,19 @@ class Satori_Audit_Cpt {
             'search_items'       => __( 'Search Audit Reports', 'satori-audit' ),
             'not_found'          => __( 'No audit reports found.', 'satori-audit' ),
             'not_found_in_trash' => __( 'No audit reports found in Trash.', 'satori-audit' ),
-        ];
+        );
 
-        $args = [
+        $args = array(
             'labels'              => $labels,
             'public'              => false,
             'show_ui'             => true,
             'show_in_menu'        => false,
             'capability_type'     => 'post',
-            'supports'            => [ 'title', 'editor', 'custom-fields' ],
+            'supports'            => array( 'title', 'editor', 'custom-fields' ),
             'rewrite'             => false,
             'map_meta_cap'        => true,
             'exclude_from_search' => true,
-        ];
+        );
 
         register_post_type( 'satori_audit_report', $args );
     }

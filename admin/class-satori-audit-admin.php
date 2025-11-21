@@ -7,135 +7,114 @@
 
 declare( strict_types=1 );
 
-namespace Satori_Audit\Admin;
+namespace Satori_Audit;
 
-use Satori_Audit\Admin\Screens\Satori_Audit_Screen_Archive;
-use Satori_Audit\Admin\Screens\Satori_Audit_Screen_Dashboard;
-use Satori_Audit\Admin\Screens\Satori_Audit_Screen_Settings;
-use Satori_Audit\Includes\Satori_Audit_Plugin;
+use Satori_Audit\Screen_Archive;
+use Satori_Audit\Screen_Dashboard;
+use Satori_Audit\Screen_Settings;
 
 if ( ! defined( 'ABSPATH' ) ) {
-    exit;
+exit;
 }
 
 /**
  * Register admin menus and bootstrap screen controllers.
  */
-class Satori_Audit_Admin {
-    /**
-     * Dashboard screen controller.
-     *
-     * @var Satori_Audit_Screen_Dashboard
-     */
-    private Satori_Audit_Screen_Dashboard $dashboard_screen;
+class Admin {
+/**
+ * Flag to avoid double boot.
+ *
+ * @var bool
+ */
+protected static $booted = false;
 
-    /**
-     * Archive screen controller.
-     *
-     * @var Satori_Audit_Screen_Archive
-     */
-    private Satori_Audit_Screen_Archive $archive_screen;
+/**
+ * Initialise admin hooks.
+ *
+ * @return void
+ */
+public static function init(): void {
+if ( true === self::$booted ) {
+return;
+}
 
-    /**
-     * Settings screen controller.
-     *
-     * @var Satori_Audit_Screen_Settings
-     */
-    private Satori_Audit_Screen_Settings $settings_screen;
+self::$booted = true;
 
-    /**
-     * Constructor.
-     */
-    public function __construct() {
-        $this->dashboard_screen = new Satori_Audit_Screen_Dashboard();
-        $this->archive_screen   = new Satori_Audit_Screen_Archive();
-        $this->settings_screen  = new Satori_Audit_Screen_Settings();
+add_action( 'admin_menu', array( self::class, 'register_menus' ) );
+add_action( 'admin_enqueue_scripts', array( self::class, 'enqueue_assets' ) );
+}
 
-        add_action( 'satori_audit_register_admin_screens', [ $this, 'register_menus' ] );
-        add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
-        add_action( 'admin_notices', [ $this, 'render_notices' ] );
-    }
+/**
+ * Register menu and submenu pages for the plugin.
+ *
+ * @return void
+ */
+public static function register_menus(): void {
+$capability = 'manage_options';
 
-    /**
-     * Register menu and submenu pages for the plugin.
-     */
-    public function register_menus(): void {
-        $settings = Satori_Audit_Plugin::get_settings();
-        $capability = $settings['cap_manage'] ?? 'manage_options';
+add_menu_page(
+__( 'SATORI Audit', 'satori-audit' ),
+__( 'SATORI Audit', 'satori-audit' ),
+$capability,
+'satori-audit',
+array( Screen_Dashboard::class, 'render' ),
+'dashicons-analytics',
+58
+);
 
-        add_menu_page(
-            __( 'SATORI Audit', 'satori-audit' ),
-            __( 'SATORI Audit', 'satori-audit' ),
-            $capability,
-            'satori-audit',
-            [ $this->dashboard_screen, 'render' ],
-            'dashicons-analytics',
-            58
-        );
+add_submenu_page(
+'satori-audit',
+__( 'Audit Dashboard', 'satori-audit' ),
+__( 'Dashboard', 'satori-audit' ),
+$capability,
+'satori-audit',
+array( Screen_Dashboard::class, 'render' )
+);
 
-        add_submenu_page(
-            'satori-audit',
-            __( 'Audit Dashboard', 'satori-audit' ),
-            __( 'Dashboard', 'satori-audit' ),
-            $capability,
-            'satori-audit',
-            [ $this->dashboard_screen, 'render' ]
-        );
+add_submenu_page(
+'satori-audit',
+__( 'Audit Archive', 'satori-audit' ),
+__( 'Archive', 'satori-audit' ),
+$capability,
+'satori-audit-archive',
+array( Screen_Archive::class, 'render' )
+);
 
-        add_submenu_page(
-            'satori-audit',
-            __( 'Audit Archive', 'satori-audit' ),
-            __( 'Archive', 'satori-audit' ),
-            $capability,
-            'satori-audit-archive',
-            [ $this->archive_screen, 'render' ]
-        );
+add_submenu_page(
+'satori-audit',
+__( 'Audit Settings', 'satori-audit' ),
+__( 'Settings', 'satori-audit' ),
+$capability,
+'satori-audit-settings',
+array( Screen_Settings::class, 'render' )
+);
+}
 
-        add_submenu_page(
-            'satori-audit',
-            __( 'Audit Settings', 'satori-audit' ),
-            __( 'Settings', 'satori-audit' ),
-            $settings['cap_settings'] ?? 'manage_options',
-            'satori-audit-settings',
-            [ $this->settings_screen, 'render' ]
-        );
-    }
+/**
+ * Enqueue assets for admin screens.
+ *
+ * @return void
+ */
+public static function enqueue_assets(): void {
+$screen = get_current_screen();
 
-    /**
-     * Enqueue assets for admin screens.
-     */
-    public function enqueue_assets(): void {
-        $screen = get_current_screen();
+if ( ! $screen || false === strpos( (string) $screen->base, 'satori-audit' ) ) {
+return;
+}
 
-        if ( ! $screen || false === strpos( (string) $screen->base, 'satori-audit' ) ) {
-            return;
-        }
+wp_enqueue_style(
+'satori-audit-admin',
+sprintf( '%1$sassets/css/admin.css', SATORI_AUDIT_URL ),
+array(),
+SATORI_AUDIT_VERSION
+);
 
-        wp_enqueue_style(
-            'satori-audit-admin',
-            SATORI_AUDIT_PLUGIN_URL . 'assets/css/admin.css',
-            [],
-            SATORI_AUDIT_VERSION
-        );
-
-        wp_enqueue_script(
-            'satori-audit-admin',
-            SATORI_AUDIT_PLUGIN_URL . 'assets/js/admin.js',
-            [ 'jquery' ],
-            SATORI_AUDIT_VERSION,
-            true
-        );
-    }
-
-    /**
-     * Render notices passed in query string.
-     */
-    public function render_notices(): void {
-        if ( isset( $_GET['satori_audit_notice'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-            $type    = sanitize_text_field( wp_unslash( $_GET['type'] ?? 'updated' ) );
-            $message = sanitize_text_field( wp_unslash( $_GET['satori_audit_notice'] ) );
-
-            printf( '<div class="notice notice-%1$s"><p>%2$s</p></div>', esc_attr( $type ), esc_html( $message ) );
-        }
-    }
+wp_enqueue_script(
+'satori-audit-admin',
+sprintf( '%1$sassets/js/admin.js', SATORI_AUDIT_URL ),
+array( 'jquery' ),
+SATORI_AUDIT_VERSION,
+true
+);
+}
 }
