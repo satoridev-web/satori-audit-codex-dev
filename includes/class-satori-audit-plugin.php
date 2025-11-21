@@ -38,6 +38,13 @@ class Satori_Audit_Plugin {
     }
 
     /**
+     * Public init entry point for Plugin::init() requirement.
+     */
+    public static function init(): self {
+        return self::instance();
+    }
+
+    /**
      * Hook into WordPress on construction.
      */
     private function __construct() {
@@ -111,18 +118,50 @@ class Satori_Audit_Plugin {
     }
 
     /**
-     * Default settings structure.
+     * Default settings structure covering all tabs.
      *
      * @return array
      */
     public static function get_default_settings(): array {
         return [
-            'client_name'     => '',
-            'site_name'       => '',
-            'site_url'        => '',
-            'managed_by'      => '',
-            'technician_name' => '',
-            'technician_email' => '',
+            // Service Details.
+            'client_name'        => '',
+            'site_name'          => '',
+            'site_url'           => '',
+            'managed_by'         => '',
+            'start_date'         => '',
+            'service_date'       => '',
+            'technician_name'    => '',
+            'technician_email'   => '',
+            'technician_phone'   => '',
+            'logo_id'            => '',
+            // Notifications.
+            'from_email'         => get_bloginfo( 'admin_email' ),
+            'default_recipients' => '',
+            'webhook_url'        => '',
+            'suppress_wp_emails' => 0,
+            // Safelist.
+            'enforce_safelist'   => 0,
+            'safelist'           => '',
+            // Access Control.
+            'cap_manage'         => 'manage_options',
+            'cap_export'         => 'manage_options',
+            'cap_settings'       => 'manage_options',
+            'admin_email'        => get_bloginfo( 'admin_email' ),
+            // Automation.
+            'enable_cron'        => 0,
+            'cron_day'           => '1',
+            'cron_time'          => '03:00',
+            'retain_months'      => '0',
+            // Display & Output.
+            'show_security'      => 1,
+            'show_known_issues'  => 1,
+            'pdf_page_size'      => 'A4',
+            'pdf_orientation'    => 'portrait',
+            'footer_text'        => '',
+            // PDF Diagnostics.
+            'pdf_engine'         => '',
+            'pdf_path'           => '',
         ];
     }
 }

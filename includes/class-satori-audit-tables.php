@@ -48,7 +48,24 @@ class Satori_Audit_Tables {
     }
 
     /**
-     * Placeholder for dbDelta-based table creation.
+     * Helper returning custom table name by key.
+     *
+     * @param string $key Table key.
+     *
+     * @return string
+     */
+    public static function table( string $key ): string {
+        global $wpdb;
+
+        return match ( $key ) {
+            'plugins'  => $wpdb->prefix . 'satori_audit_plugins',
+            'security' => $wpdb->prefix . 'satori_audit_security',
+            default    => '',
+        };
+    }
+
+    /**
+     * dbDelta-based table creation.
      */
     private static function maybe_create_tables(): void {
         global $wpdb;

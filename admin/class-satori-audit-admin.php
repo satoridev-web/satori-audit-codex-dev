@@ -12,6 +12,7 @@ namespace Satori_Audit\Admin;
 use Satori_Audit\Admin\Screens\Satori_Audit_Screen_Archive;
 use Satori_Audit\Admin\Screens\Satori_Audit_Screen_Dashboard;
 use Satori_Audit\Admin\Screens\Satori_Audit_Screen_Settings;
+use Satori_Audit\Includes\Satori_Audit_Plugin;
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
@@ -52,13 +53,15 @@ class Satori_Audit_Admin {
 
         add_action( 'satori_audit_register_admin_screens', [ $this, 'register_menus' ] );
         add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
+        add_action( 'admin_notices', [ $this, 'render_notices' ] );
     }
 
     /**
      * Register menu and submenu pages for the plugin.
      */
     public function register_menus(): void {
-        $capability = 'manage_options';
+        $settings = Satori_Audit_Plugin::get_settings();
+        $capability = $settings['cap_manage'] ?? 'manage_options';
 
         add_menu_page(
             __( 'SATORI Audit', 'satori-audit' ),
@@ -92,14 +95,14 @@ class Satori_Audit_Admin {
             'satori-audit',
             __( 'Audit Settings', 'satori-audit' ),
             __( 'Settings', 'satori-audit' ),
-            $capability,
+            $settings['cap_settings'] ?? 'manage_options',
             'satori-audit-settings',
             [ $this->settings_screen, 'render' ]
         );
     }
 
     /**
-     * Enqueue placeholder assets for admin screens.
+     * Enqueue assets for admin screens.
      */
     public function enqueue_assets(): void {
         $screen = get_current_screen();
@@ -122,5 +125,17 @@ class Satori_Audit_Admin {
             SATORI_AUDIT_VERSION,
             true
         );
+    }
+
+    /**
+     * Render notices passed in query string.
+     */
+    public function render_notices(): void {
+        if ( isset( $_GET['satori_audit_notice'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+            $type    = sanitize_text_field( wp_unslash( $_GET['type'] ?? 'updated' ) );
+            $message = sanitize_text_field( wp_unslash( $_GET['satori_audit_notice'] ) );
+
+            printf( '<div class="notice notice-%1$s"><p>%2$s</p></div>', esc_attr( $type ), esc_html( $message ) );
+        }
     }
 }
