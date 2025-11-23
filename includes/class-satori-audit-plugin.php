@@ -118,4 +118,35 @@ class Plugin {
 			}
 		);
 	}
+
+
+        /**
+         * Retrieve a stored setting from the consolidated option.
+         *
+         * @param string $key     Setting key.
+         * @param mixed  $default Default value if not set.
+         * @return mixed
+         */
+        public static function get_setting( string $key, $default = null ) {
+                $settings = get_option( 'satori_audit_settings', array() );
+                $settings = is_array( $settings ) ? $settings : array();
+
+                return array_key_exists( $key, $settings ) ? $settings[ $key ] : $default;
+        }
+
+        /**
+         * Update a single setting while preserving existing values.
+         *
+         * @param string $key   Setting key.
+         * @param mixed  $value Value to store.
+         * @return void
+         */
+        public static function update_setting( string $key, $value ): void {
+                $settings = get_option( 'satori_audit_settings', array() );
+                $settings = is_array( $settings ) ? $settings : array();
+
+                $settings[ $key ] = $value;
+
+                update_option( 'satori_audit_settings', $settings );
+        }
 }
