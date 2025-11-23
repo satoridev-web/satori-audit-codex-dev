@@ -117,22 +117,24 @@ class Plugin {
 				}
 			}
 		);
-	}
+    }
 
 
-        /**
-         * Retrieve a stored setting from the consolidated option.
-         *
-         * @param string $key     Setting key.
-         * @param mixed  $default Default value if not set.
-         * @return mixed
-         */
-        public static function get_setting( string $key, $default = null ) {
-                $settings = get_option( 'satori_audit_settings', array() );
-                $settings = is_array( $settings ) ? $settings : array();
+    /**
+     * Retrieve a stored setting from the consolidated option.
+     *
+     * @param string $key     Setting key.
+     * @param mixed  $default Default value if not set.
+     * @return mixed
+     */
+    public static function get_setting( string $key, $default = null ) {
+            $settings = get_option( 'satori_audit_settings', array() );
+            $settings = is_array( $settings ) ? $settings : array();
 
-                return array_key_exists( $key, $settings ) ? $settings[ $key ] : $default;
-        }
+            $value = self::traverse_settings( $settings, $key );
+
+            return null !== $value ? $value : $default;
+    }
 
         /**
          * Update a single setting while preserving existing values.
@@ -141,12 +143,77 @@ class Plugin {
          * @param mixed  $value Value to store.
          * @return void
          */
-        public static function update_setting( string $key, $value ): void {
-                $settings = get_option( 'satori_audit_settings', array() );
-                $settings = is_array( $settings ) ? $settings : array();
+    public static function update_setting( string $key, $value ): void {
+            $settings = get_option( 'satori_audit_settings', array() );
+            $settings = is_array( $settings ) ? $settings : array();
 
-                $settings[ $key ] = $value;
+            $settings = self::set_traversed_value( $settings, $key, $value );
 
-                update_option( 'satori_audit_settings', $settings );
-        }
+            update_option( 'satori_audit_settings', $settings );
+    }
+
+    /**
+     * Traverse a settings array using dot notation.
+     *
+     * @param array  $settings Stored settings array.
+     * @param string $path     Dot-notated path or simple key.
+     * @return mixed|null
+     */
+    protected static function traverse_settings( array $settings, string $path ) {
+            if ( '' === $path ) {
+                    return null;
+            }
+
+            if ( false === strpos( $path, '.' ) ) {
+                    return array_key_exists( $path, $settings ) ? $settings[ $path ] : null;
+            }
+
+            $segments = explode( '.', $path );
+            $value    = $settings;
+
+            foreach ( $segments as $segment ) {
+                    if ( is_array( $value ) && array_key_exists( $segment, $value ) ) {
+                            $value = $value[ $segment ];
+                            continue;
+                    }
+
+                    return null;
+            }
+
+            return $value;
+    }
+
+    /**
+     * Set a value in the settings array using dot notation.
+     *
+     * @param array  $settings Settings array.
+     * @param string $path     Dot-notated path or simple key.
+     * @param mixed  $value    Value to set.
+     * @return array
+     */
+    protected static function set_traversed_value( array $settings, string $path, $value ): array {
+            if ( '' === $path ) {
+                    return $settings;
+            }
+
+            if ( false === strpos( $path, '.' ) ) {
+                    $settings[ $path ] = $value;
+                    return $settings;
+            }
+
+            $segments = explode( '.', $path );
+            $target   =& $settings;
+
+            foreach ( $segments as $segment ) {
+                    if ( ! isset( $target[ $segment ] ) || ! is_array( $target[ $segment ] ) ) {
+                            $target[ $segment ] = array();
+                    }
+
+                    $target =& $target[ $segment ];
+            }
+
+            $target = $value;
+
+            return $settings;
+    }
 }

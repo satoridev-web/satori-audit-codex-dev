@@ -26,55 +26,64 @@ class Screen_Settings {
 		add_action( 'admin_init', array( self::class, 'register_settings' ) );
 	}
 
-	/**
-	 * Register Settings API sections and fields.
-	 *
-	 * @return void
-	 */
-	public static function register_settings(): void {
-		register_setting(
-		'satori_audit_settings',
-		'satori_audit_settings',
-		array(
-		'sanitize_callback' => array( self::class, 'sanitize_settings' ),
-		)
-		);
+        /**
+         * Register Settings API sections and fields.
+         *
+         * @return void
+         */
+        public static function register_settings(): void {
+                if ( ! current_user_can( 'manage_options' ) ) {
+                        return;
+                }
 
-		foreach ( self::get_field_definitions() as $tab => $fields ) {
-			$page        = self::get_page_slug( $tab );
-			$section_id  = 'satori_audit_section_' . $tab;
-			$tabs        = self::get_tabs();
-			$description = self::get_section_description( $tab );
+                $active_tab = self::get_active_tab();
+                $fields     = self::get_field_definitions();
 
-			add_settings_section(
-			$section_id,
-			esc_html( $tabs[ $tab ] ),
-			static function () use ( $description ) {
-				if ( ! empty( $description ) ) {
-					echo '<p>' . esc_html( $description ) . '</p>';
-				}
-			},
-			$page
-			);
+                register_setting(
+                        'satori_audit_settings_group',
+                        'satori_audit_settings',
+                        array(
+                                'sanitize_callback' => array( self::class, 'sanitize_settings' ),
+                        )
+                );
 
-			foreach ( $fields as $key => $field ) {
-				add_settings_field(
-				$key,
-				esc_html( $field['label'] ),
-				array( self::class, 'render_field' ),
-				$page,
-				$section_id,
-				array_merge(
-				$field,
-				array(
-				'key' => $key,
-				'tab' => $tab,
-				),
-				)
-				);
-			}
-		}
-	}
+                if ( ! isset( $fields[ $active_tab ] ) ) {
+                        return;
+                }
+
+                $page        = self::get_page_slug( $active_tab );
+                $section_id  = 'satori_audit_section_' . $active_tab;
+                $tabs        = self::get_tabs();
+                $description = self::get_section_description( $active_tab );
+
+                add_settings_section(
+                        $section_id,
+                        esc_html( $tabs[ $active_tab ] ),
+                        static function () use ( $description ) {
+                                if ( ! empty( $description ) ) {
+                                        echo '<p>' . esc_html( $description ) . '</p>';
+                                }
+                        },
+                        $page
+                );
+
+                foreach ( $fields[ $active_tab ] as $key => $field ) {
+                        add_settings_field(
+                                $key,
+                                esc_html( $field['label'] ),
+                                array( self::class, 'render_field' ),
+                                $page,
+                                $section_id,
+                                array_merge(
+                                        $field,
+                                        array(
+                                                'key' => $key,
+                                                'tab' => $active_tab,
+                                        )
+                                )
+                        );
+                }
+        }
 
 	/**
 	 * Sanitize settings before saving.
@@ -82,26 +91,30 @@ class Screen_Settings {
 	 * @param array $input Raw input from the form submission.
 	 * @return array
 	 */
-	public static function sanitize_settings( $input ): array {
-		$input = is_array( $input ) ? $input : array();
+        public static function sanitize_settings( $input ): array {
+                if ( ! current_user_can( 'manage_options' ) ) {
+                        return get_option( 'satori_audit_settings', array() );
+                }
+
+                $input = is_array( $input ) ? $input : array();
 
 		$tab = isset( $_POST['satori_audit_settings_tab'] )
 		? sanitize_key( wp_unslash( (string) $_POST['satori_audit_settings_tab'] ) )
 		: self::get_default_tab();
 
-		$fields        = self::get_field_definitions();
-		$current_tab   = $fields[ $tab ] ?? array();
-		$current_saved = get_option( 'satori_audit_settings', array() );
-		$current_saved = is_array( $current_saved ) ? $current_saved : array();
+                $fields          = self::get_field_definitions();
+                $current_tab     = $fields[ $tab ] ?? array();
+                $current_saved   = get_option( 'satori_audit_settings', array() );
+                $current_saved   = is_array( $current_saved ) ? $current_saved : array();
 
-		foreach ( $current_tab as $key => $field ) {
-			if ( isset( $field['type'] ) && 'button' === $field['type'] ) {
-				continue;
-			}
+                foreach ( $current_tab as $key => $field ) {
+                        if ( isset( $field['type'] ) && in_array( $field['type'], array( 'button', 'note' ), true ) ) {
+                                continue;
+                        }
 
-			$value                 = $input[ $key ] ?? null;
-			$current_saved[ $key ] = self::sanitize_field_value( $value, $field );
-		}
+                        $value                 = $input[ $key ] ?? null;
+                        $current_saved[ $key ] = self::sanitize_field_value( $value, $field );
+                }
 
 		add_settings_error(
 		'satori_audit_settings',
@@ -123,51 +136,53 @@ class Screen_Settings {
 	protected static function sanitize_field_value( $value, array $field ) {
 		$type = $field['type'] ?? 'text';
 
-		switch ( $type ) {
-			case 'checkbox':
-			return empty( $value ) ? 0 : 1;
-			case 'email':
-			return sanitize_email( (string) wp_unslash( $value ) );
-			case 'url':
-			return esc_url_raw( (string) wp_unslash( $value ) );
-			case 'textarea':
-			return sanitize_textarea_field( (string) wp_unslash( $value ) );
-			case 'number':
-			$number = absint( $value );
-			if ( isset( $field['min'] ) ) {
-				$number = max( (int) $field['min'], $number );
-			}
-			if ( isset( $field['max'] ) ) {
-				$number = min( (int) $field['max'], $number );
-			}
-			return $number;
-			case 'time':
-			$time = (string) wp_unslash( $value );
-			return preg_match( '/^\d{2}:\d{2}$/', $time ) ? $time : '';
-			case 'date':
-			$date = (string) wp_unslash( $value );
-			return preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date ) ? $date : '';
-			case 'select':
-			$value   = (string) wp_unslash( $value );
-			$options = $field['options'] ?? array();
-			return array_key_exists( $value, $options ) ? $value : ( $field['default'] ?? '' );
-			case 'media':
-			return absint( $value );
-			case 'text':
-			default:
-			return sanitize_text_field( (string) wp_unslash( $value ) );
-		}
-	}
+                switch ( $type ) {
+                        case 'checkbox':
+                        return empty( $value ) ? 0 : 1;
+                        case 'email':
+                        return sanitize_email( trim( (string) wp_unslash( $value ) ) );
+                        case 'url':
+                        return esc_url_raw( trim( (string) wp_unslash( $value ) ) );
+                        case 'textarea':
+                        return trim( sanitize_textarea_field( (string) wp_unslash( $value ) ) );
+                        case 'number':
+                        $number = absint( $value );
+                        if ( isset( $field['min'] ) ) {
+                                $number = max( (int) $field['min'], $number );
+                        }
+                        if ( isset( $field['max'] ) ) {
+                                $number = min( (int) $field['max'], $number );
+                        }
+                        return $number;
+                        case 'time':
+                        $time = trim( (string) wp_unslash( $value ) );
+                        return preg_match( '/^\d{2}:\d{2}$/', $time ) ? $time : '';
+                        case 'date':
+                        $date = trim( (string) wp_unslash( $value ) );
+                        return preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date ) ? $date : '';
+                        case 'select':
+                        $value   = trim( (string) wp_unslash( $value ) );
+                        $options = $field['options'] ?? array();
+                        return array_key_exists( $value, $options ) ? $value : ( $field['default'] ?? '' );
+                        case 'media':
+                        return absint( $value );
+                        case 'note':
+                        return $field['default'] ?? '';
+                        case 'text':
+                        default:
+                        return trim( sanitize_text_field( (string) wp_unslash( $value ) ) );
+                }
+        }
 
 	/**
 	 * Display settings content.
 	 *
 	 * @return void
 	 */
-	public static function render(): void {
-		if ( ! current_user_can( 'manage_options' ) ) {
-			return;
-		}
+        public static function render(): void {
+                if ( ! current_user_can( 'manage_options' ) ) {
+                        return;
+                }
 
 		$tabs       = self::get_tabs();
 		$active_tab = self::get_active_tab();
@@ -176,14 +191,14 @@ class Screen_Settings {
 		settings_errors( 'satori_audit_settings' );
 
 		echo '<div class="wrap satori-audit-wrap">';
-		echo '<h1>' . esc_html__( 'SATORI Audit – Settings', 'satori-audit' ) . '</h1>';
-		self::render_tabs( $tabs, $active_tab );
+                echo '<h1>' . esc_html__( 'SATORI Audit – Settings', 'satori-audit' ) . '</h1>';
+                self::render_tabs( $tabs, $active_tab );
 
-		echo '<form method="post" action="options.php">';
-		settings_fields( 'satori_audit_settings' );
-		echo '<input type="hidden" name="satori_audit_settings_tab" value="' . esc_attr( $active_tab ) . '" />';
-		do_settings_sections( self::get_page_slug( $active_tab ) );
-		if ( in_array( $active_tab, $tab_keys, true ) ) {
+                echo '<form method="post" action="options.php">';
+                settings_fields( 'satori_audit_settings_group' );
+                echo '<input type="hidden" name="satori_audit_settings_tab" value="' . esc_attr( $active_tab ) . '" />';
+                do_settings_sections( self::get_page_slug( $active_tab ) );
+                if ( in_array( $active_tab, $tab_keys, true ) ) {
 			submit_button();
 		}
 		echo '</form>';
@@ -215,15 +230,15 @@ class Screen_Settings {
 	 * @param array $args Field arguments.
 	 * @return void
 	 */
-	public static function render_field( array $args ): void {
-		$key         = $args['key'];
-		$type        = $args['type'] ?? 'text';
-		$description = $args['description'] ?? '';
-		$default     = $args['default'] ?? '';
-		$value       = Plugin::get_setting( $key, $default );
+        public static function render_field( array $args ): void {
+                $key         = $args['key'];
+                $type        = $args['type'] ?? 'text';
+                $description = $args['description'] ?? '';
+                $default     = $args['default'] ?? '';
+                $value       = Plugin::get_setting( $key, $default );
 
-		switch ( $type ) {
-			case 'textarea':
+                switch ( $type ) {
+                        case 'textarea':
 			echo '<textarea class="large-text" rows="5" id="' . esc_attr( $key ) . '" name="satori_audit_settings[' . esc_attr( $key ) . ']">' . esc_textarea( (string) $value ) . '</textarea>';
 			break;
 			case 'checkbox':
@@ -253,15 +268,19 @@ class Screen_Settings {
 			echo '<p class="description">' . esc_html__( 'Enter the attachment ID for the PDF header logo.', 'satori-audit' ) . '</p>';
 			$description = '';
 			break;
-			case 'button':
-			echo '<button type="button" class="button" disabled>' . esc_html( $args['button_label'] ) . '</button>';
-			break;
-			case 'email':
-			case 'url':
-			case 'text':
-			default:
-			echo '<input type="' . esc_attr( $type ) . '" class="regular-text" id="' . esc_attr( $key ) . '" name="satori_audit_settings[' . esc_attr( $key ) . ']" value="' . esc_attr( (string) $value ) . '" />';
-		}
+                        case 'button':
+                        echo '<button type="button" class="button" disabled>' . esc_html( $args['button_label'] ) . '</button>';
+                        break;
+                        case 'note':
+                        echo '<p class="description">' . esc_html( $description ) . '</p>';
+                        $description = '';
+                        break;
+                        case 'email':
+                        case 'url':
+                        case 'text':
+                        default:
+                        echo '<input type="' . esc_attr( $type ) . '" class="regular-text" id="' . esc_attr( $key ) . '" name="satori_audit_settings[' . esc_attr( $key ) . ']" value="' . esc_attr( (string) $value ) . '" />';
+                }
 
 		if ( ! empty( $description ) && 'checkbox' !== $type ) {
 			echo '<p class="description">' . esc_html( $description ) . '</p>';
@@ -321,160 +340,159 @@ class Screen_Settings {
 	 *
 	 * @return array
 	 */
-	protected static function get_field_definitions(): array {
-		return array(
-		'service'       => array(
-		'site_name'   => array(
-		'label'       => __( 'Site Name', 'satori-audit' ),
-		'type'        => 'text',
-		'description' => __( 'Name of the site being serviced.', 'satori-audit' ),
-		),
-		'site_url'    => array(
-		'label'       => __( 'Site URL', 'satori-audit' ),
-		'type'        => 'url',
-		'description' => __( 'Primary URL for the site.', 'satori-audit' ),
-		),
-		'client_name' => array(
-		'label'       => __( 'Client / Organisation', 'satori-audit' ),
-		'type'        => 'text',
-		'description' => __( 'Name of the client or organisation.', 'satori-audit' ),
-		),
-		'managed_by'  => array(
-		'label'       => __( 'Managed By', 'satori-audit' ),
-		'type'        => 'text',
-		'description' => __( 'Team or company managing the service.', 'satori-audit' ),
-		),
-		'start_date'  => array(
-		'label'       => __( 'Start Date', 'satori-audit' ),
-		'type'        => 'date',
-		'description' => __( 'Service start date.', 'satori-audit' ),
-		),
-		'pdf_logo_id' => array(
-		'label'       => __( 'PDF Header Logo ID', 'satori-audit' ),
-		'type'        => 'media',
-		'description' => __( 'Media attachment ID used as the PDF header logo.', 'satori-audit' ),
-		),
-		),
-		'notifications' => array(
-		'from_email'  => array(
-		'label'       => __( 'From Email', 'satori-audit' ),
-		'type'        => 'email',
-		'description' => __( 'Sender email address for notifications.', 'satori-audit' ),
-		),
-		'recipients'  => array(
-		'label'       => __( 'Recipients', 'satori-audit' ),
-		'type'        => 'textarea',
-		'description' => __( 'Comma or line separated email recipients.', 'satori-audit' ),
-		),
-		'webhook_url' => array(
-		'label'       => __( 'Webhook URL', 'satori-audit' ),
-		'type'        => 'url',
-		'description' => __( 'Optional webhook for external logging.', 'satori-audit' ),
-		),
-		),
-		'safelist'      => array(
-		'enforce_safelist' => array(
-		'label'       => __( 'Enforce Safelist', 'satori-audit' ),
-		'type'        => 'checkbox',
-		'description' => __( 'Restrict notifications to safelist entries.', 'satori-audit' ),
-		),
-		'safelist_entries' => array(
-		'label'       => __( 'Safelist Entries', 'satori-audit' ),
-		'type'        => 'textarea',
-		'description' => __( 'One email address or domain per line.', 'satori-audit' ),
-		),
-		),
-		'access'        => array(
-		'capability_manage' => array(
-		'label'       => __( 'Capability to Manage', 'satori-audit' ),
-		'type'        => 'text',
-		'description' => __( 'Capability required to manage SATORI Audit settings and reports.', 'satori-audit' ),
-		'default'     => 'manage_options',
-		),
-		'main_admin_email'  => array(
-		'label'       => __( 'Main Administrator Email', 'satori-audit' ),
-		'type'        => 'email',
-		'description' => __( 'Primary administrator contact for critical notices.', 'satori-audit' ),
-		),
-		),
-		'automation'    => array(
-		'monthly_email_enabled' => array(
-		'label'       => __( 'Enable Monthly PDF Email', 'satori-audit' ),
-		'type'        => 'checkbox',
-		'description' => __( 'Send monthly reports automatically.', 'satori-audit' ),
-		),
-		'monthly_day'          => array(
-		'label'       => __( 'Day of Month', 'satori-audit' ),
-		'type'        => 'number',
-		'description' => __( 'Day of the month to send the report (1–28).', 'satori-audit' ),
-		'default'     => 1,
-		'min'        => 1,
-		'max'        => 28,
-		),
-		'monthly_time'         => array(
-		'label'       => __( 'Send Time', 'satori-audit' ),
-		'type'        => 'time',
-		'description' => __( 'Time of day to send the report.', 'satori-audit' ),
-		),
-		'retention_months'     => array(
-		'label'       => __( 'Retention (months)', 'satori-audit' ),
-		'type'        => 'number',
-		'description' => __( 'How many months of history to keep. 0 keeps all.', 'satori-audit' ),
-		'default'     => 0,
-		'min'        => 0,
-		),
-		),
-		'display'       => array(
-		'show_overview_section' => array(
-		'label'       => __( 'Show Overview Section', 'satori-audit' ),
-		'type'        => 'checkbox',
-		'description' => __( 'Display the overview in reports.', 'satori-audit' ),
-		),
-		'show_plugin_table'    => array(
-		'label'       => __( 'Show Plugin Table', 'satori-audit' ),
-		'type'        => 'checkbox',
-		'description' => __( 'Include plugin inventory in reports.', 'satori-audit' ),
-		),
-		'show_security_section' => array(
-		'label'       => __( 'Show Security Section', 'satori-audit' ),
-		'type'        => 'checkbox',
-		'description' => __( 'Include security findings in reports.', 'satori-audit' ),
-		),
-		'pdf_page_size'        => array(
-		'label'       => __( 'PDF Page Size', 'satori-audit' ),
-		'type'        => 'select',
-		'options'     => array(
-		'A4'     => __( 'A4', 'satori-audit' ),
-		'Letter' => __( 'Letter', 'satori-audit' ),
-		),
-		'default'     => 'A4',
-		),
-		'pdf_orientation'      => array(
-		'label'       => __( 'PDF Orientation', 'satori-audit' ),
-		'type'        => 'select',
-		'options'     => array(
-		'portrait'  => __( 'Portrait', 'satori-audit' ),
-		'landscape' => __( 'Landscape', 'satori-audit' ),
-		),
-		'default'     => 'portrait',
-		),
-		),
-		'pdf'           => array(
-		'test_pdf_engine'   => array(
-		'label'        => __( 'Test PDF Engine', 'satori-audit' ),
-		'type'         => 'button',
-		'button_label' => __( 'Test PDF Engine', 'satori-audit' ),
-		'description'  => __( 'Coming soon. Diagnostics will be added in a future update.', 'satori-audit' ),
-		),
-		'check_requirements' => array(
-		'label'        => __( 'Check Requirements', 'satori-audit' ),
-		'type'         => 'button',
-		'button_label' => __( 'Check Requirements', 'satori-audit' ),
-		'description'  => __( 'Coming soon. Requirements checks will be added in a future update.', 'satori-audit' ),
-		),
-		),
-		);
-	}
+        protected static function get_field_definitions(): array {
+                return array(
+                        'service'       => array(
+                                'service_site_name'   => array(
+                                        'label'       => __( 'Service Site Name', 'satori-audit' ),
+                                        'type'        => 'text',
+                                        'description' => __( 'Name of the site being serviced.', 'satori-audit' ),
+                                ),
+                                'service_site_url'    => array(
+                                        'label'       => __( 'Service Site URL', 'satori-audit' ),
+                                        'type'        => 'text',
+                                        'description' => __( 'Primary URL for the serviced site.', 'satori-audit' ),
+                                ),
+                                'service_client_name' => array(
+                                        'label'       => __( 'Client / Organisation', 'satori-audit' ),
+                                        'type'        => 'text',
+                                        'description' => __( 'Name of the client or organisation.', 'satori-audit' ),
+                                ),
+                                'service_managed_by'  => array(
+                                        'label'       => __( 'Managed By', 'satori-audit' ),
+                                        'type'        => 'text',
+                                        'description' => __( 'Team or company managing the service.', 'satori-audit' ),
+                                ),
+                                'service_start_date'  => array(
+                                        'label'       => __( 'Start Date', 'satori-audit' ),
+                                        'type'        => 'date',
+                                        'description' => __( 'Service start date (YYYY-MM-DD).', 'satori-audit' ),
+                                ),
+                                'service_pdf_logo_id' => array(
+                                        'label'       => __( 'PDF Header Logo ID', 'satori-audit' ),
+                                        'type'        => 'media',
+                                        'description' => __( 'Media attachment ID used as the PDF header logo.', 'satori-audit' ),
+                                ),
+                        ),
+                        'notifications' => array(
+                                'notifications_from_email' => array(
+                                        'label'       => __( 'From Email', 'satori-audit' ),
+                                        'type'        => 'email',
+                                        'description' => __( 'Sender email address for notifications.', 'satori-audit' ),
+                                ),
+                                'notifications_recipients' => array(
+                                        'label'       => __( 'Recipients', 'satori-audit' ),
+                                        'type'        => 'textarea',
+                                        'description' => __( 'Comma or line separated email recipients.', 'satori-audit' ),
+                                ),
+                                'notifications_webhook_url' => array(
+                                        'label'       => __( 'Webhook URL', 'satori-audit' ),
+                                        'type'        => 'text',
+                                        'description' => __( 'Optional webhook for external logging.', 'satori-audit' ),
+                                ),
+                        ),
+                        'safelist'      => array(
+                                'safelist_enforce' => array(
+                                        'label'       => __( 'Enforce Safelist', 'satori-audit' ),
+                                        'type'        => 'checkbox',
+                                        'description' => __( 'Restrict notifications to safelist entries.', 'satori-audit' ),
+                                ),
+                                'safelist_entries' => array(
+                                        'label'       => __( 'Safelist Entries', 'satori-audit' ),
+                                        'type'        => 'textarea',
+                                        'description' => __( 'One email address or domain per line.', 'satori-audit' ),
+                                ),
+                        ),
+                        'access'        => array(
+                                'access_capability_manage' => array(
+                                        'label'       => __( 'Capability to Manage', 'satori-audit' ),
+                                        'type'        => 'text',
+                                        'description' => __( 'Capability required to manage SATORI Audit settings and reports.', 'satori-audit' ),
+                                        'default'     => 'manage_options',
+                                ),
+                                'access_main_admin_email'  => array(
+                                        'label'       => __( 'Main Administrator Email', 'satori-audit' ),
+                                        'type'        => 'email',
+                                        'description' => __( 'Primary administrator contact for critical notices.', 'satori-audit' ),
+                                ),
+                        ),
+                        'automation'    => array(
+                                'automation_monthly_email_enabled' => array(
+                                        'label'       => __( 'Enable Monthly PDF Email', 'satori-audit' ),
+                                        'type'        => 'checkbox',
+                                        'description' => __( 'Send monthly reports automatically.', 'satori-audit' ),
+                                ),
+                                'automation_monthly_day'          => array(
+                                        'label'       => __( 'Day of Month', 'satori-audit' ),
+                                        'type'        => 'number',
+                                        'description' => __( 'Day of the month to send the report (1–31).', 'satori-audit' ),
+                                        'default'     => 1,
+                                        'min'         => 1,
+                                        'max'         => 31,
+                                ),
+                                'automation_monthly_time'         => array(
+                                        'label'       => __( 'Send Time', 'satori-audit' ),
+                                        'type'        => 'time',
+                                        'description' => __( 'Time of day to send the report.', 'satori-audit' ),
+                                ),
+                                'automation_retention_months'     => array(
+                                        'label'       => __( 'Retention (months)', 'satori-audit' ),
+                                        'type'        => 'number',
+                                        'description' => __( 'How many months of history to keep. 0 keeps all.', 'satori-audit' ),
+                                        'default'     => 0,
+                                        'min'         => 0,
+                                ),
+                        ),
+                        'display'       => array(
+                                'display_show_overview' => array(
+                                        'label'       => __( 'Show Overview Section', 'satori-audit' ),
+                                        'type'        => 'checkbox',
+                                        'description' => __( 'Display the overview in reports.', 'satori-audit' ),
+                                ),
+                                'display_show_plugins'    => array(
+                                        'label'       => __( 'Show Plugin Table', 'satori-audit' ),
+                                        'type'        => 'checkbox',
+                                        'description' => __( 'Include plugin inventory in reports.', 'satori-audit' ),
+                                ),
+                                'display_show_security' => array(
+                                        'label'       => __( 'Show Security Section', 'satori-audit' ),
+                                        'type'        => 'checkbox',
+                                        'description' => __( 'Include security findings in reports.', 'satori-audit' ),
+                                ),
+                                'display_pdf_page_size'        => array(
+                                        'label'       => __( 'PDF Page Size', 'satori-audit' ),
+                                        'type'        => 'select',
+                                        'options'     => array(
+                                                'A4'     => __( 'A4', 'satori-audit' ),
+                                                'Letter' => __( 'Letter', 'satori-audit' ),
+                                        ),
+                                        'default'     => 'A4',
+                                ),
+                                'display_pdf_orientation'      => array(
+                                        'label'       => __( 'PDF Orientation', 'satori-audit' ),
+                                        'type'        => 'select',
+                                        'options'     => array(
+                                                'portrait'  => __( 'Portrait', 'satori-audit' ),
+                                                'landscape' => __( 'Landscape', 'satori-audit' ),
+                                        ),
+                                        'default'     => 'portrait',
+                                ),
+                        ),
+                        'pdf'           => array(
+                                'pdf_engine_notes' => array(
+                                        'label'       => __( 'PDF Engine Notes', 'satori-audit' ),
+                                        'type'        => 'note',
+                                        'description' => __( 'PDF engine diagnostics will be added in a future release.', 'satori-audit' ),
+                                ),
+                                'pdf_engine_test' => array(
+                                        'label'        => __( 'Test PDF Engine', 'satori-audit' ),
+                                        'type'         => 'button',
+                                        'button_label' => __( 'Test PDF Engine', 'satori-audit' ),
+                                        'description'  => __( 'Placeholder action for upcoming diagnostics.', 'satori-audit' ),
+                                ),
+                        ),
+                );
+        }
 
 	/**
 	 * Section descriptions keyed by tab.
