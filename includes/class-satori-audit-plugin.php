@@ -93,10 +93,16 @@ class Plugin {
 			}
 		);
 
-		// Admin UI (menus + screens).
-		if ( is_admin() && class_exists( Admin::class ) && method_exists( Admin::class, 'init' ) ) {
-			Admin::init();
-		}
+                // Admin UI (menus + screens).
+                if ( is_admin() ) {
+                        if ( class_exists( Screen_Settings::class ) && method_exists( Screen_Settings::class, 'init' ) ) {
+                                Screen_Settings::init();
+                        }
+
+                        if ( class_exists( Admin::class ) && method_exists( Admin::class, 'init' ) ) {
+                                Admin::init();
+                        }
+                }
 
 		// Reports engine.
 		add_action(

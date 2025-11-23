@@ -497,6 +497,3 @@ class Screen_Settings {
 	}
 }
 
-if ( is_admin() ) {
-	Screen_Settings::init();
-}
