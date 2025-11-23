@@ -7,7 +7,7 @@
 
 declare( strict_types=1 );
 
-namespace Satori_Audit\Includes;
+namespace Satori_Audit;
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Provide helpers for reading and diffing plugin state.
  */
-class Satori_Audit_Plugins_Service {
+class Plugins_Service {
     /**
      * Retrieve the current plugins installed on the site, keyed by slug.
      *
@@ -100,5 +100,57 @@ class Satori_Audit_Plugins_Service {
         }
 
         return $diff;
+    }
+
+    /**
+     * Refresh plugin inventory rows for a report.
+     *
+     * @param int $report_id Report post ID.
+     * @return void
+     */
+    public static function refresh_plugins_for_report( int $report_id ): void {
+        global $wpdb;
+
+        if ( ! function_exists( 'get_plugins' ) ) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+
+        $table = Tables::table( 'plugins' );
+
+        if ( empty( $table ) ) {
+            return;
+        }
+
+        $plugins = get_plugins();
+        $active  = (array) get_option( 'active_plugins', array() );
+
+        $wpdb->delete( $table, array( 'report_id' => $report_id ), array( '%d' ) );
+
+        foreach ( $plugins as $file => $data ) {
+            $slug         = sanitize_title( wp_basename( $file ) );
+            $description  = isset( $data['Description'] ) ? wp_strip_all_tags( (string) $data['Description'] ) : '';
+            $trimmed_desc = wp_trim_words( $description, 40, '…' );
+            $is_active    = in_array( $file, $active, true ) ? 1 : 0;
+
+            $wpdb->insert(
+                $table,
+                array(
+                    'report_id'          => $report_id,
+                    'plugin_slug'        => $slug,
+                    'plugin_name'        => $data['Name'] ?? $slug,
+                    'plugin_description' => $trimmed_desc,
+                    'plugin_type'        => '',
+                    'version_from'       => '',
+                    'version_to'         => '',
+                    'version_current'    => $data['Version'] ?? '',
+                    'is_active'          => $is_active,
+                    'status_flag'        => 'unchanged',
+                    'price_notes'        => '',
+                    'comments'           => '',
+                    'last_checked'       => current_time( 'mysql', true ),
+                ),
+                array( '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s' )
+            );
+        }
     }
 }
