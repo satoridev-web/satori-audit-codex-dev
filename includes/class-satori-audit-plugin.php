@@ -13,23 +13,32 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * Main plugin class.
- *
- * Responsible for wiring up CPTs, tables, admin UI, reports,
- * automation, and any other core services.
  */
 class Plugin {
 
 	/**
-	 * Singleton-like flag.
+	 * Singleton flag.
 	 *
 	 * @var bool
 	 */
 	protected static $booted = false;
 
 	/**
-	 * Initialise the plugin.
+	 * Option name for settings.
 	 *
-	 * Called from satori-audit.php on plugins_loaded.
+	 * @var string
+	 */
+	const SETTINGS_OPTION = 'satori_audit_settings';
+
+	/**
+	 * Database version option key.
+	 *
+	 * @var string
+	 */
+	const DB_VERSION_OPTION = 'satori_audit_db_version';
+
+	/**
+	 * Initialise the plugin.
 	 *
 	 * @return void
 	 */
@@ -45,45 +54,55 @@ class Plugin {
 	}
 
 	/**
-	 * Plugin activation tasks.
-	 *
-	 * Called from the register_activation_hook in satori-audit.php.
+	 * Run on plugin activation.
 	 *
 	 * @return void
 	 */
 	public static function activate() {
-		// Ensure CPT and tables are registered on activation.
-		if ( class_exists( Cpt::class ) && method_exists( Cpt::class, 'register' ) ) {
-			Cpt::register();
+		// Register CPT.
+		if ( class_exists( Cpt::class ) ) {
+			if ( method_exists( Cpt::class, 'register' ) ) {
+				Cpt::register();
+			} elseif ( method_exists( Cpt::class, 'init' ) ) {
+				Cpt::init();
+			}
 		}
 
-		if ( class_exists( Tables::class ) && method_exists( Tables::class, 'install' ) ) {
-			Tables::install();
+		// Install / upgrade DB tables.
+		if ( class_exists( Tables::class ) ) {
+			if ( method_exists( Tables::class, 'install' ) ) {
+				Tables::install();
+			} elseif ( method_exists( Tables::class, 'maybe_upgrade' ) ) {
+				Tables::maybe_upgrade();
+			}
 		}
 
-		// Flush rewrite rules if CPT exists.
 		if ( function_exists( 'flush_rewrite_rules' ) ) {
 			flush_rewrite_rules();
 		}
 	}
 
 	/**
-	 * Attach hooks for the runtime lifecycle.
+	 * Attach runtime hooks.
 	 *
 	 * @return void
 	 */
 	protected function hooks() {
-		// Register CPT and related structures.
+		// Register CPT.
 		add_action(
 			'init',
 			static function () {
-				if ( class_exists( Cpt::class ) && method_exists( Cpt::class, 'register' ) ) {
-					Cpt::register();
+				if ( class_exists( Cpt::class ) ) {
+					if ( method_exists( Cpt::class, 'register' ) ) {
+						Cpt::register();
+					} elseif ( method_exists( Cpt::class, 'init' ) ) {
+						Cpt::init();
+					}
 				}
 			}
 		);
 
-		// Ensure DB tables are available.
+		// Ensure DB tables are up to date.
 		add_action(
 			'init',
 			static function () {
@@ -93,12 +112,12 @@ class Plugin {
 			}
 		);
 
-		// Admin UI (menus + screens).
+		// Admin UI.
 		if ( is_admin() && class_exists( Admin::class ) && method_exists( Admin::class, 'init' ) ) {
 			Admin::init();
 		}
 
-		// Reports engine.
+		// Reports engine bootstrap.
 		add_action(
 			'init',
 			static function () {
@@ -108,7 +127,7 @@ class Plugin {
 			}
 		);
 
-		// Automation (cron etc).
+		// Automation / cron.
 		add_action(
 			'init',
 			static function () {
@@ -117,103 +136,55 @@ class Plugin {
 				}
 			}
 		);
-    }
+	}
 
+	/* -------------------------------------------------
+	 * Settings helpers
+	 * -------------------------------------------------*/
 
-    /**
-     * Retrieve a stored setting from the consolidated option.
-     *
-     * @param string $key     Setting key.
-     * @param mixed  $default Default value if not set.
-     * @return mixed
-     */
-    public static function get_setting( string $key, $default = null ) {
-            $settings = get_option( 'satori_audit_settings', array() );
-            $settings = is_array( $settings ) ? $settings : array();
+	/**
+	 * Return all plugin settings.
+	 *
+	 * @return array
+	 */
+	public static function get_settings() {
+		$settings = get_option( self::SETTINGS_OPTION, array() );
 
-            $value = self::traverse_settings( $settings, $key );
+		if ( ! is_array( $settings ) ) {
+			$settings = array();
+		}
 
-            return null !== $value ? $value : $default;
-    }
+		return $settings;
+	}
 
-        /**
-         * Update a single setting while preserving existing values.
-         *
-         * @param string $key   Setting key.
-         * @param mixed  $value Value to store.
-         * @return void
-         */
-    public static function update_setting( string $key, $value ): void {
-            $settings = get_option( 'satori_audit_settings', array() );
-            $settings = is_array( $settings ) ? $settings : array();
+	/**
+	 * Get a single setting by key.
+	 *
+	 * @param string $key     Setting key.
+	 * @param mixed  $default Default value if not set.
+	 * @return mixed
+	 */
+	public static function get_setting( $key, $default = null ) {
+		$settings = self::get_settings();
 
-            $settings = self::set_traversed_value( $settings, $key, $value );
+		if ( array_key_exists( $key, $settings ) ) {
+			return $settings[ $key ];
+		}
 
-            update_option( 'satori_audit_settings', $settings );
-    }
+		return $default;
+	}
 
-    /**
-     * Traverse a settings array using dot notation.
-     *
-     * @param array  $settings Stored settings array.
-     * @param string $path     Dot-notated path or simple key.
-     * @return mixed|null
-     */
-    protected static function traverse_settings( array $settings, string $path ) {
-            if ( '' === $path ) {
-                    return null;
-            }
+	/**
+	 * Update a single setting.
+	 *
+	 * @param string $key   Setting key.
+	 * @param mixed  $value Value.
+	 * @return void
+	 */
+	public static function update_setting( $key, $value ) {
+		$settings          = self::get_settings();
+		$settings[ $key ]  = $value;
 
-            if ( false === strpos( $path, '.' ) ) {
-                    return array_key_exists( $path, $settings ) ? $settings[ $path ] : null;
-            }
-
-            $segments = explode( '.', $path );
-            $value    = $settings;
-
-            foreach ( $segments as $segment ) {
-                    if ( is_array( $value ) && array_key_exists( $segment, $value ) ) {
-                            $value = $value[ $segment ];
-                            continue;
-                    }
-
-                    return null;
-            }
-
-            return $value;
-    }
-
-    /**
-     * Set a value in the settings array using dot notation.
-     *
-     * @param array  $settings Settings array.
-     * @param string $path     Dot-notated path or simple key.
-     * @param mixed  $value    Value to set.
-     * @return array
-     */
-    protected static function set_traversed_value( array $settings, string $path, $value ): array {
-            if ( '' === $path ) {
-                    return $settings;
-            }
-
-            if ( false === strpos( $path, '.' ) ) {
-                    $settings[ $path ] = $value;
-                    return $settings;
-            }
-
-            $segments = explode( '.', $path );
-            $target   =& $settings;
-
-            foreach ( $segments as $segment ) {
-                    if ( ! isset( $target[ $segment ] ) || ! is_array( $target[ $segment ] ) ) {
-                            $target[ $segment ] = array();
-                    }
-
-                    $target =& $target[ $segment ];
-            }
-
-            $target = $value;
-
-            return $settings;
-    }
+		update_option( self::SETTINGS_OPTION, $settings );
+	}
 }
