@@ -145,6 +145,33 @@ class Screen_Settings {
                         return esc_url_raw( trim( (string) wp_unslash( $value ) ) );
                         case 'textarea':
                         return trim( sanitize_textarea_field( (string) wp_unslash( $value ) ) );
+                        case 'textarea_emails':
+                        $raw_value = (string) wp_unslash( $value );
+                        $parts     = preg_split( '/[\n,]+/', $raw_value );
+                        $emails    = array();
+
+                        foreach ( (array) $parts as $email ) {
+                                $sanitized = sanitize_email( trim( (string) $email ) );
+                                if ( ! empty( $sanitized ) ) {
+                                        $emails[] = $sanitized;
+                                }
+                        }
+
+                        return implode( "\n", $emails );
+                        case 'textarea_lines':
+                        $raw_value = (string) wp_unslash( $value );
+                        $parts     = preg_split( '/[\n]+/', $raw_value );
+                        $lines     = array();
+
+                        foreach ( (array) $parts as $line ) {
+                                $sanitized = trim( sanitize_text_field( (string) $line ) );
+
+                                if ( '' !== $sanitized ) {
+                                        $lines[] = $sanitized;
+                                }
+                        }
+
+                        return implode( "\n", $lines );
                         case 'number':
                         $number = absint( $value );
                         if ( isset( $field['min'] ) ) {
@@ -239,8 +266,10 @@ class Screen_Settings {
 
                 switch ( $type ) {
                         case 'textarea':
-			echo '<textarea class="large-text" rows="5" id="' . esc_attr( $key ) . '" name="satori_audit_settings[' . esc_attr( $key ) . ']">' . esc_textarea( (string) $value ) . '</textarea>';
-			break;
+                        case 'textarea_emails':
+                        case 'textarea_lines':
+                        echo '<textarea class="large-text" rows="5" id="' . esc_attr( $key ) . '" name="satori_audit_settings[' . esc_attr( $key ) . ']">' . esc_textarea( (string) $value ) . '</textarea>';
+                        break;
 			case 'checkbox':
 			echo '<label><input type="checkbox" id="' . esc_attr( $key ) . '" name="satori_audit_settings[' . esc_attr( $key ) . ']" value="1" ' . checked( 1, (int) $value, false ) . ' /> ' . esc_html( $description ) . '</label>';
 			$description = '';
@@ -269,7 +298,7 @@ class Screen_Settings {
 			$description = '';
 			break;
                         case 'button':
-                        echo '<button type="button" class="button" disabled>' . esc_html( $args['button_label'] ) . '</button>';
+                        echo '<button type="button" class="button">' . esc_html( $args['button_label'] ) . '</button>';
                         break;
                         case 'note':
                         echo '<p class="description">' . esc_html( $description ) . '</p>';
@@ -350,7 +379,7 @@ class Screen_Settings {
                                 ),
                                 'service_site_url'    => array(
                                         'label'       => __( 'Service Site URL', 'satori-audit' ),
-                                        'type'        => 'text',
+                                        'type'        => 'url',
                                         'description' => __( 'Primary URL for the serviced site.', 'satori-audit' ),
                                 ),
                                 'service_client_name' => array(
@@ -382,12 +411,12 @@ class Screen_Settings {
                                 ),
                                 'notifications_recipients' => array(
                                         'label'       => __( 'Recipients', 'satori-audit' ),
-                                        'type'        => 'textarea',
+                                        'type'        => 'textarea_emails',
                                         'description' => __( 'Comma or line separated email recipients.', 'satori-audit' ),
                                 ),
                                 'notifications_webhook_url' => array(
                                         'label'       => __( 'Webhook URL', 'satori-audit' ),
-                                        'type'        => 'text',
+                                        'type'        => 'url',
                                         'description' => __( 'Optional webhook for external logging.', 'satori-audit' ),
                                 ),
                         ),
@@ -399,7 +428,7 @@ class Screen_Settings {
                                 ),
                                 'safelist_entries' => array(
                                         'label'       => __( 'Safelist Entries', 'satori-audit' ),
-                                        'type'        => 'textarea',
+                                        'type'        => 'textarea_lines',
                                         'description' => __( 'One email address or domain per line.', 'satori-audit' ),
                                 ),
                         ),
