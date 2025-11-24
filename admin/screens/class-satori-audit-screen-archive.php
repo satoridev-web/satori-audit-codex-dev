@@ -30,9 +30,13 @@ class Screen_Archive {
 		$period            = $selected_report_id ? get_post_meta( $selected_report_id, '_satori_audit_period', true ) : '';
 		$plugin_rows       = array();
 
-		if ( $selected_report_id && $report instanceof \WP_Post ) {
-			$plugin_rows = Reports::get_plugin_rows( $selected_report_id );
-		}
+                if ( $selected_report_id && $report instanceof \WP_Post ) {
+                        if ( function_exists( 'satori_audit_log' ) ) {
+                                satori_audit_log( 'Report preview loaded for ID ' . $selected_report_id . '.' );
+                        }
+
+                        $plugin_rows = Reports::get_plugin_rows( $selected_report_id );
+                }
 
 		echo '<div class="wrap satori-audit-wrap">';
 		echo '<h1>' . esc_html__( 'SATORI Audit – Archive', 'satori-audit' ) . '</h1>';

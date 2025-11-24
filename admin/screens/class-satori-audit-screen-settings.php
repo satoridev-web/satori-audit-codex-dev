@@ -37,9 +37,10 @@ class Screen_Settings {
 	 *
 	 * @return void
 	 */
-	public static function init(): void {
-		add_action( 'admin_init', array( self::class, 'register_settings' ) );
-	}
+        public static function init(): void {
+                add_action( 'admin_init', array( self::class, 'register_settings' ) );
+                add_action( 'admin_init', array( self::class, 'log_admin_init' ) );
+        }
 
 	/* -------------------------------------------------
 	 * Tabs
@@ -753,8 +754,8 @@ class Screen_Settings {
 	 * @param mixed $input Raw input.
 	 * @return array<string,mixed>
 	 */
-	public static function sanitize_settings( $input ): array {
-		$output = self::get_default_settings();
+        public static function sanitize_settings( $input ): array {
+                $output = self::get_default_settings();
 
 		if ( ! is_array( $input ) ) {
 			return $output;
@@ -849,12 +850,35 @@ class Screen_Settings {
 			'log_to_file',
 		);
 
-		foreach ( $checkboxes as $key ) {
-			$output[ $key ] = ! empty( $input[ $key ] ) ? 1 : 0;
-		}
+                foreach ( $checkboxes as $key ) {
+                        $output[ $key ] = ! empty( $input[ $key ] ) ? 1 : 0;
+                }
 
-		return $output;
-	}
+                if ( function_exists( 'satori_audit_log' ) && ! empty( $output['debug_mode'] ) ) {
+                        $diagnostics_summary = sprintf(
+                                'Settings saved for %s (debug_mode=%d, log_to_file=%d, retention=%s).',
+                                self::OPTION_KEY,
+                                (int) $output['debug_mode'],
+                                (int) $output['log_to_file'],
+                                (string) $output['log_retention_days']
+                        );
+
+                        satori_audit_log( $diagnostics_summary );
+                }
+
+                return $output;
+        }
+
+        /**
+         * Log admin initialisation when debug mode is enabled.
+         *
+         * @return void
+         */
+        public static function log_admin_init(): void {
+                if ( function_exists( 'satori_audit_log' ) ) {
+                        satori_audit_log( 'Admin init: registered settings for SATORI Audit.' );
+                }
+        }
 
 	/* -------------------------------------------------
 	 * Page renderer

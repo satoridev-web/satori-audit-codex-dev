@@ -276,9 +276,10 @@ class Automation {
         if ( empty( $settings['debug_mode'] ) ) {
                 return;
         }
-        
+
         if ( function_exists( 'satori_audit_log' ) ) {
-                satori_audit_log( $message, $context );
+                $context_suffix = $context ? ' ' . wp_json_encode( $context ) : '';
+                satori_audit_log( $message . $context_suffix );
         }
         }
 }

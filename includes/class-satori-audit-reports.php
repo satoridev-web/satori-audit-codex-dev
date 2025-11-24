@@ -33,15 +33,19 @@ class Reports {
 	 *
 	 * @return void
 	 */
-	public static function handle_generate_request(): void {
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( 'You do not have permission to generate reports.', 'satori-audit' ) );
-		}
+        public static function handle_generate_request(): void {
+                if ( ! current_user_can( 'manage_options' ) ) {
+                        wp_die( esc_html__( 'You do not have permission to generate reports.', 'satori-audit' ) );
+                }
 
-		check_admin_referer( 'satori_audit_generate_report' );
+                check_admin_referer( 'satori_audit_generate_report' );
 
-		$redirect  = admin_url( 'admin.php?page=satori-audit' );
-		$report_id = self::generate_current_month();
+                if ( function_exists( 'satori_audit_log' ) ) {
+                        satori_audit_log( 'Report generation request received via admin action.' );
+                }
+
+                $redirect  = admin_url( 'admin.php?page=satori-audit' );
+                $report_id = self::generate_current_month();
 
 		if ( $report_id > 0 ) {
 			$redirect = add_query_arg( 'satori_audit_notice', 'report_generated', $redirect );
@@ -58,12 +62,16 @@ class Reports {
 	 *
 	 * @return int Report post ID or 0 on failure.
 	 */
-	public static function generate_current_month(): int {
-		$period    = gmdate( 'Y-m' );
-		$report_id = self::get_report_id_by_period( $period );
+        public static function generate_current_month(): int {
+                $period    = gmdate( 'Y-m' );
+                $report_id = self::get_report_id_by_period( $period );
 
-		if ( ! $report_id ) {
-			$report_id = wp_insert_post(
+                if ( function_exists( 'satori_audit_log' ) ) {
+                        satori_audit_log( 'Generating report for period ' . $period . '.' );
+                }
+
+                if ( ! $report_id ) {
+                        $report_id = wp_insert_post(
 				array(
 					'post_type'   => 'satori_audit_report',
 					'post_status' => 'publish',
