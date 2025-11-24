@@ -36,9 +36,6 @@ class Screen_Settings {
                         return;
                 }
 
-                $active_tab = self::get_active_tab();
-                $fields     = self::get_field_definitions();
-
                 register_setting(
                         'satori_audit_settings_group',
                         'satori_audit_settings',
@@ -47,41 +44,45 @@ class Screen_Settings {
                         )
                 );
 
-                if ( ! isset( $fields[ $active_tab ] ) ) {
-                        return;
-                }
+                $fields = self::get_field_definitions();
+                $tabs   = self::get_tabs();
 
-                $page        = self::get_page_slug( $active_tab );
-                $section_id  = 'satori_audit_section_' . $active_tab;
-                $tabs        = self::get_tabs();
-                $description = self::get_section_description( $active_tab );
+                foreach ( $fields as $tab => $tab_fields ) {
+                        if ( ! isset( $tabs[ $tab ] ) ) {
+                                continue;
+                        }
 
-                add_settings_section(
-                        $section_id,
-                        esc_html( $tabs[ $active_tab ] ),
-                        static function () use ( $description ) {
-                                if ( ! empty( $description ) ) {
-                                        echo '<p>' . esc_html( $description ) . '</p>';
-                                }
-                        },
-                        $page
-                );
+                        $page        = self::get_page_slug( $tab );
+                        $section_id  = 'satori_audit_section_' . $tab;
+                        $description = self::get_section_description( $tab );
 
-                foreach ( $fields[ $active_tab ] as $key => $field ) {
-                        add_settings_field(
-                                $key,
-                                esc_html( $field['label'] ),
-                                array( self::class, 'render_field' ),
-                                $page,
+                        add_settings_section(
                                 $section_id,
-                                array_merge(
-                                        $field,
-                                        array(
-                                                'key' => $key,
-                                                'tab' => $active_tab,
-                                        )
-                                )
+                                esc_html( $tabs[ $tab ] ),
+                                static function () use ( $description ) {
+                                        if ( ! empty( $description ) ) {
+                                                echo '<p>' . esc_html( $description ) . '</p>';
+                                        }
+                                },
+                                $page
                         );
+
+                        foreach ( $tab_fields as $key => $field ) {
+                                add_settings_field(
+                                        $key,
+                                        esc_html( $field['label'] ),
+                                        array( self::class, 'render_field' ),
+                                        $page,
+                                        $section_id,
+                                        array_merge(
+                                                $field,
+                                                array(
+                                                        'key' => $key,
+                                                        'tab' => $tab,
+                                                )
+                                        )
+                                );
+                        }
                 }
         }
 
