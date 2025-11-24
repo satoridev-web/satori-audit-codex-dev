@@ -98,6 +98,23 @@ spl_autoload_register(
 );
 
 /* -------------------------------------------------
+ * Global logging helper
+ * -------------------------------------------------*/
+if ( ! function_exists( 'satori_audit_log' ) ) {
+        /**
+         * Helper function for logging.
+         *
+         * @param string $message Message to log.
+         * @return void
+         */
+        function satori_audit_log( string $message ): void {
+                if ( class_exists( '\\Satori_Audit\\Logger' ) ) {
+                        \Satori_Audit\Logger::log( $message );
+                }
+        }
+}
+
+/* -------------------------------------------------
  * Activation hook
  * -------------------------------------------------*/
 
