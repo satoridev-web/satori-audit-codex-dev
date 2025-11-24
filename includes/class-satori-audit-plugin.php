@@ -118,20 +118,30 @@ class Plugin {
 		}
 
 		// Reports engine bootstrap.
-		add_action(
-			'init',
-			static function () {
-				if ( class_exists( Reports::class ) && method_exists( Reports::class, 'init' ) ) {
-					Reports::init();
-				}
-			}
-		);
+                add_action(
+                        'init',
+                        static function () {
+                                if ( class_exists( Reports::class ) && method_exists( Reports::class, 'init' ) ) {
+                                        Reports::init();
+                                }
+                        }
+                );
 
-		// Automation / cron.
-		add_action(
-			'init',
-			static function () {
-				if ( class_exists( Automation::class ) && method_exists( Automation::class, 'init' ) ) {
+                // Notifications.
+                add_action(
+                        'init',
+                        static function () {
+                                if ( class_exists( Notifications::class ) && method_exists( Notifications::class, 'init' ) ) {
+                                        Notifications::init();
+                                }
+                        }
+                );
+
+                // Automation / cron.
+                add_action(
+                        'init',
+                        static function () {
+                                if ( class_exists( Automation::class ) && method_exists( Automation::class, 'init' ) ) {
 					Automation::init();
 				}
 			}
