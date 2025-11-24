@@ -84,12 +84,18 @@ class Reports {
 			}
 		}
 
-		update_post_meta( (int) $report_id, '_satori_audit_period', $period );
+                update_post_meta( (int) $report_id, '_satori_audit_period', $period );
 
-		Plugins_Service::refresh_plugins_for_report( (int) $report_id );
+                Plugins_Service::refresh_plugins_for_report( (int) $report_id );
 
-		return (int) $report_id;
-	}
+                $updates = Plugins_Service::get_plugin_update_history( (int) $report_id );
+
+                if ( ! empty( $updates ) ) {
+                        update_post_meta( (int) $report_id, '_satori_audit_plugin_updates', $updates );
+                }
+
+                return (int) $report_id;
+        }
 
 	/**
 	 * Get a report post ID for a given period.
