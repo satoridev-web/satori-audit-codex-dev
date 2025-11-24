@@ -124,18 +124,381 @@ class Reports {
 	 * @param int $report_id Report post ID.
 	 * @return array
 	 */
-	public static function get_plugin_rows( int $report_id ): array {
-		global $wpdb;
+        public static function get_plugin_rows( int $report_id ): array {
+                global $wpdb;
 
-		$table = Tables::table( 'plugins' );
+                $table = Tables::table( 'plugins' );
 
 		if ( empty( $table ) ) {
 			return array();
 		}
 
-		return $wpdb->get_results(
-			$wpdb->prepare( "SELECT * FROM {$table} WHERE report_id = %d ORDER BY plugin_name ASC", $report_id ),
-			ARRAY_A
-		);
-	}
+                return $wpdb->get_results(
+                        $wpdb->prepare( "SELECT * FROM {$table} WHERE report_id = %d ORDER BY plugin_name ASC", $report_id ),
+                        ARRAY_A
+                );
+        }
+
+        /**
+         * Return a rendered HTML document for the provided report.
+         *
+         * @param int $report_id Report post ID.
+         * @return string
+         */
+        public static function get_report_html( int $report_id ): string {
+                $settings = self::get_settings();
+
+                self::log_debug( 'Begin rendering report HTML for ID ' . $report_id, $settings );
+
+                $metadata        = self::get_report_metadata( $report_id );
+                $header          = self::render_header( $settings );
+                $summary_section = self::render_summary_section( $report_id, $settings, $metadata );
+                $updates_section = self::render_plugin_updates( $report_id, $settings );
+                $diagnostics     = self::render_diagnostics( $settings );
+
+                $body = $header . $summary_section . $updates_section . $diagnostics;
+
+                self::log_debug( 'Completed rendering report HTML for ID ' . $report_id, $settings );
+
+                return self::wrap_html( $body );
+        }
+
+        /**
+         * Output the rendered report HTML (used for admin preview).
+         *
+         * @param int $report_id Report post ID.
+         * @return void
+         */
+        public static function render( int $report_id ): void {
+                echo self::get_report_html( $report_id );
+        }
+
+        /**
+         * Fetch plugin + display settings with safe defaults.
+         *
+         * @return array
+         */
+        private static function get_settings(): array {
+                $defaults = array(
+                        'service_client'            => '',
+                        'service_site_name'         => get_bloginfo( 'name' ),
+                        'service_site_url'          => home_url(),
+                        'service_managed_by'        => '',
+                        'service_start_date'        => '',
+                        'display_date_format'       => 'Y-m-d',
+                        'display_show_debug_section'=> 0,
+                        'debug_mode'                => 0,
+                );
+
+                $settings = Plugin::get_settings();
+
+                if ( ! is_array( $settings ) ) {
+                        $settings = array();
+                }
+
+                return array_merge( $defaults, $settings );
+        }
+
+        /**
+         * Collect metadata for a report post.
+         *
+         * @param int $report_id Report post ID.
+         * @return array
+         */
+        private static function get_report_metadata( int $report_id ): array {
+                $report = get_post( $report_id );
+
+                if ( ! $report instanceof \WP_Post ) {
+                        return array(
+                                'title' => __( 'Audit Report', 'satori-audit' ),
+                                'date'  => '',
+                        );
+                }
+
+                return array(
+                        'title' => get_the_title( $report ),
+                        'date'  => $report->post_date,
+                );
+        }
+
+        /**
+         * Render the header section.
+         *
+         * @param array $settings Plugin settings.
+         * @return string
+         */
+        private static function render_header( array $settings ): string {
+                $date_format = self::get_date_format( $settings );
+                $site_name   = ! empty( $settings['service_site_name'] ) ? (string) $settings['service_site_name'] : get_bloginfo( 'name' );
+                $site_url    = ! empty( $settings['service_site_url'] ) ? (string) $settings['service_site_url'] : home_url();
+                $managed_by  = $settings['service_managed_by'] ?? '';
+                $client      = $settings['service_client'] ?? '';
+                $start_date  = ! empty( $settings['service_start_date'] ) ? self::format_date( (string) $settings['service_start_date'], $date_format ) : '';
+
+                $rows = array(
+                        array(
+                                'label' => __( 'Site Name', 'satori-audit' ),
+                                'value' => esc_html( $site_name ),
+                        ),
+                        array(
+                                'label' => __( 'Site URL', 'satori-audit' ),
+                                'value' => sprintf( '<a href="%s">%s</a>', esc_url( $site_url ), esc_html( $site_url ) ),
+                        ),
+                        array(
+                                'label' => __( 'Client', 'satori-audit' ),
+                                'value' => esc_html( (string) $client ),
+                        ),
+                        array(
+                                'label' => __( 'Managed By', 'satori-audit' ),
+                                'value' => esc_html( (string) $managed_by ),
+                        ),
+                        array(
+                                'label' => __( 'Service Start Date', 'satori-audit' ),
+                                'value' => esc_html( $start_date ),
+                        ),
+                );
+
+                self::log_debug( 'Rendered report header section.', $settings );
+
+                ob_start();
+                ?>
+                <header class="satori-report__header">
+                        <div class="satori-report__title-block">
+                                <h1 class="satori-report__title"><?php echo esc_html__( 'SATORI Audit Report', 'satori-audit' ); ?></h1>
+                                <p class="satori-report__subtitle"><?php echo esc_html__( 'Comprehensive overview of your site health and updates.', 'satori-audit' ); ?></p>
+                        </div>
+                        <dl class="satori-report__meta">
+                                <?php foreach ( $rows as $row ) : ?>
+                                        <div class="satori-report__meta-row">
+                                                <dt><?php echo esc_html( $row['label'] ); ?></dt>
+                                                <dd><?php echo wp_kses_post( $row['value'] ); ?></dd>
+                                        </div>
+                                <?php endforeach; ?>
+                        </dl>
+                </header>
+                <?php
+                return (string) ob_get_clean();
+        }
+
+        /**
+         * Render the summary section.
+         *
+         * @param int   $report_id Report post ID.
+         * @param array $settings  Plugin settings.
+         * @param array $metadata  Report metadata.
+         * @return string
+         */
+        private static function render_summary_section( int $report_id, array $settings, array $metadata ): string {
+                $date_format = self::get_date_format( $settings );
+                $report_date = ! empty( $metadata['date'] ) ? self::format_date( (string) $metadata['date'], $date_format ) : '';
+                $title       = $metadata['title'] ?? sprintf( __( 'Report #%d', 'satori-audit' ), $report_id );
+
+                self::log_debug( 'Rendered summary section.', $settings );
+
+                ob_start();
+                ?>
+                <section id="summary" class="satori-report__section">
+                        <h2><?php echo esc_html__( 'Summary', 'satori-audit' ); ?></h2>
+                        <div class="satori-report__summary">
+                                <p class="satori-report__summary-title"><?php echo esc_html( $title ); ?></p>
+                                <?php if ( ! empty( $report_date ) ) : ?>
+                                        <p class="satori-report__summary-date"><?php echo esc_html__( 'Report Date', 'satori-audit' ); ?>: <?php echo esc_html( $report_date ); ?></p>
+                                <?php endif; ?>
+                                <p class="satori-report__summary-text"><?php echo esc_html__( 'This report highlights recent plugin updates, key site details, and diagnostic information collected for your records.', 'satori-audit' ); ?></p>
+                        </div>
+                </section>
+                <?php
+                return (string) ob_get_clean();
+        }
+
+        /**
+         * Render plugin update list.
+         *
+         * @param int   $report_id Report post ID.
+         * @param array $settings  Plugin settings.
+         * @return string
+         */
+        private static function render_plugin_updates( int $report_id, array $settings ): string {
+                $date_format = self::get_date_format( $settings );
+                $updates     = Plugins_Service::get_plugin_update_history( $report_id );
+
+                self::log_debug( 'Rendered plugin update section.', $settings );
+
+                ob_start();
+                ?>
+                <section id="plugin-updates" class="satori-report__section">
+                        <h2><?php echo esc_html__( 'Plugin Updates', 'satori-audit' ); ?></h2>
+                        <?php if ( empty( $updates ) ) : ?>
+                                <p><?php echo esc_html__( 'No plugin updates recorded for this period.', 'satori-audit' ); ?></p>
+                        <?php else : ?>
+                                <div class="satori-report__plugin-list">
+                                        <?php foreach ( $updates as $update ) :
+                                                $name        = $update['plugin'] ?? '';
+                                                $old_version = $update['old_version'] ?? '';
+                                                $new_version = $update['new_version'] ?? '';
+                                                $date_value  = $update['date'] ?? '';
+                                                $date        = ! empty( $date_value ) ? self::format_date( (string) $date_value, $date_format ) : '';
+                                                ?>
+                                                <div class="satori-report__plugin-update">
+                                                        <div class="satori-report__plugin-name"><?php echo esc_html( $name ); ?></div>
+                                                        <dl class="satori-report__plugin-meta">
+                                                                <div><dt><?php echo esc_html__( 'Previous Version', 'satori-audit' ); ?></dt><dd><?php echo esc_html( $old_version ); ?></dd></div>
+                                                                <div><dt><?php echo esc_html__( 'Updated Version', 'satori-audit' ); ?></dt><dd><?php echo esc_html( $new_version ); ?></dd></div>
+                                                                <?php if ( ! empty( $date ) ) : ?>
+                                                                        <div><dt><?php echo esc_html__( 'Updated On', 'satori-audit' ); ?></dt><dd><?php echo esc_html( $date ); ?></dd></div>
+                                                                <?php endif; ?>
+                                                        </dl>
+                                                </div>
+                                        <?php endforeach; ?>
+                                </div>
+                        <?php endif; ?>
+                </section>
+                <?php
+                return (string) ob_get_clean();
+        }
+
+        /**
+         * Render diagnostics block if enabled.
+         *
+         * @param array $settings Plugin settings.
+         * @return string
+         */
+        private static function render_diagnostics( array $settings ): string {
+                if ( empty( $settings['display_show_debug_section'] ) ) {
+                        return '';
+                }
+
+                if ( ! function_exists( 'get_plugins' ) ) {
+                        require_once ABSPATH . 'wp-admin/includes/plugin.php';
+                }
+
+                $data = array(
+                        'debug_mode'   => ! empty( $settings['debug_mode'] ) ? __( 'Enabled', 'satori-audit' ) : __( 'Disabled', 'satori-audit' ),
+                        'timestamp'    => self::format_date( current_time( 'mysql' ), self::get_date_format( $settings ) ),
+                        'wp_version'   => get_bloginfo( 'version' ),
+                        'php_version'  => PHP_VERSION,
+                        'active_theme' => wp_get_theme()->get( 'Name' ),
+                        'plugin_count' => function_exists( 'get_plugins' ) ? count( get_plugins() ) : 0,
+                );
+
+                self::log_debug( 'Rendered diagnostics section.', $settings );
+
+                ob_start();
+                ?>
+                <section id="diagnostics" class="satori-report__section">
+                        <h2><?php echo esc_html__( 'Diagnostics', 'satori-audit' ); ?></h2>
+                        <dl class="satori-report__diagnostics">
+                                <div><dt><?php echo esc_html__( 'Debug Mode', 'satori-audit' ); ?></dt><dd><?php echo esc_html( $data['debug_mode'] ); ?></dd></div>
+                                <div><dt><?php echo esc_html__( 'Rendered On', 'satori-audit' ); ?></dt><dd><?php echo esc_html( $data['timestamp'] ); ?></dd></div>
+                                <div><dt><?php echo esc_html__( 'WordPress Version', 'satori-audit' ); ?></dt><dd><?php echo esc_html( $data['wp_version'] ); ?></dd></div>
+                                <div><dt><?php echo esc_html__( 'PHP Version', 'satori-audit' ); ?></dt><dd><?php echo esc_html( $data['php_version'] ); ?></dd></div>
+                                <div><dt><?php echo esc_html__( 'Active Theme', 'satori-audit' ); ?></dt><dd><?php echo esc_html( $data['active_theme'] ); ?></dd></div>
+                                <div><dt><?php echo esc_html__( 'Total Plugins', 'satori-audit' ); ?></dt><dd><?php echo esc_html( (string) $data['plugin_count'] ); ?></dd></div>
+                        </dl>
+                </section>
+                <?php
+                return (string) ob_get_clean();
+        }
+
+        /**
+         * Wrap the provided body content in a minimal HTML document.
+         *
+         * @param string $body Report body HTML.
+         * @return string
+         */
+        private static function wrap_html( string $body ): string {
+                $styles = '
+                        body { font-family: "Helvetica Neue", Arial, sans-serif; color: #1f2933; margin: 0; padding: 32px; line-height: 1.6; }
+                        h1, h2, h3, h4 { color: #0b3b5c; margin-top: 0; }
+                        a { color: #0b7fc2; text-decoration: none; }
+                        a:hover { text-decoration: underline; }
+                        .satori-report__header { border-bottom: 2px solid #e5e7eb; padding-bottom: 24px; margin-bottom: 24px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; }
+                        .satori-report__title { margin: 0; font-size: 28px; }
+                        .satori-report__subtitle { margin: 4px 0 0; color: #52606d; }
+                        .satori-report__meta { margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px 16px; }
+                        .satori-report__meta-row { display: flex; justify-content: space-between; border: 1px solid #e5e7eb; border-radius: 6px; padding: 8px 12px; background: #f9fafb; }
+                        .satori-report__meta-row dt { font-weight: 600; color: #52606d; }
+                        .satori-report__meta-row dd { margin: 0; text-align: right; }
+                        .satori-report__section { margin-bottom: 32px; }
+                        .satori-report__summary { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; }
+                        .satori-report__summary-title { font-size: 20px; margin: 0 0 4px; }
+                        .satori-report__summary-date { margin: 0 0 8px; color: #52606d; }
+                        .satori-report__summary-text { margin: 0; }
+                        .satori-report__plugin-list { display: grid; gap: 12px; }
+                        .satori-report__plugin-update { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; background: #fff; }
+                        .satori-report__plugin-name { font-weight: 700; font-size: 16px; margin-bottom: 8px; }
+                        .satori-report__plugin-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 4px 12px; margin: 0; padding: 0; }
+                        .satori-report__plugin-meta dt { font-weight: 600; color: #52606d; }
+                        .satori-report__plugin-meta dd { margin: 0; }
+                        .satori-report__diagnostics { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 6px 12px; margin: 0; padding: 0; }
+                        .satori-report__diagnostics dt { font-weight: 600; color: #52606d; }
+                        .satori-report__diagnostics dd { margin: 0; }
+                ';
+
+                ob_start();
+                ?>
+                <!DOCTYPE html>
+                <html lang="en">
+                        <head>
+                                <meta charset="utf-8" />
+                                <meta name="viewport" content="width=device-width, initial-scale=1" />
+                                <style><?php echo $styles; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></style>
+                        </head>
+                        <body>
+                                <?php echo $body; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+                        </body>
+                </html>
+                <?php
+                return (string) ob_get_clean();
+        }
+
+        /**
+         * Format a date string using the configured display format.
+         *
+         * @param string $value Raw date value.
+         * @param string $format Desired format.
+         * @return string
+         */
+        private static function format_date( string $value, string $format ): string {
+                $timestamp = strtotime( $value );
+
+                if ( false === $timestamp ) {
+                        return $value;
+                }
+
+                return gmdate( $format, $timestamp );
+        }
+
+        /**
+         * Retrieve configured date format with fallback.
+         *
+         * @param array $settings Settings array.
+         * @return string
+         */
+        private static function get_date_format( array $settings ): string {
+                $format = $settings['display_date_format'] ?? '';
+
+                if ( empty( $format ) || ! is_string( $format ) ) {
+                        $format = 'Y-m-d';
+                }
+
+                return $format;
+        }
+
+        /**
+         * Write a log line when debug mode is enabled.
+         *
+         * @param string $message  Log message.
+         * @param array  $settings Settings array.
+         * @return void
+         */
+        private static function log_debug( string $message, array $settings ): void {
+                if ( empty( $settings['debug_mode'] ) ) {
+                        return;
+                }
+
+                if ( function_exists( 'satori_audit_log' ) ) {
+                        satori_audit_log( $message );
+                }
+        }
 }
