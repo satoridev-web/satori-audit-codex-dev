@@ -13,23 +13,32 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * Main plugin class.
- *
- * Responsible for wiring up CPTs, tables, admin UI, reports,
- * automation, and any other core services.
  */
 class Plugin {
 
 	/**
-	 * Singleton-like flag.
+	 * Singleton flag.
 	 *
 	 * @var bool
 	 */
 	protected static $booted = false;
 
 	/**
-	 * Initialise the plugin.
+	 * Option name for settings.
 	 *
-	 * Called from satori-audit.php on plugins_loaded.
+	 * @var string
+	 */
+	const SETTINGS_OPTION = 'satori_audit_settings';
+
+	/**
+	 * Database version option key.
+	 *
+	 * @var string
+	 */
+	const DB_VERSION_OPTION = 'satori_audit_db_version';
+
+	/**
+	 * Initialise the plugin.
 	 *
 	 * @return void
 	 */
@@ -45,45 +54,55 @@ class Plugin {
 	}
 
 	/**
-	 * Plugin activation tasks.
-	 *
-	 * Called from the register_activation_hook in satori-audit.php.
+	 * Run on plugin activation.
 	 *
 	 * @return void
 	 */
 	public static function activate() {
-		// Ensure CPT and tables are registered on activation.
-		if ( class_exists( Cpt::class ) && method_exists( Cpt::class, 'register' ) ) {
-			Cpt::register();
+		// Register CPT.
+		if ( class_exists( Cpt::class ) ) {
+			if ( method_exists( Cpt::class, 'register' ) ) {
+				Cpt::register();
+			} elseif ( method_exists( Cpt::class, 'init' ) ) {
+				Cpt::init();
+			}
 		}
 
-		if ( class_exists( Tables::class ) && method_exists( Tables::class, 'install' ) ) {
-			Tables::install();
+		// Install / upgrade DB tables.
+		if ( class_exists( Tables::class ) ) {
+			if ( method_exists( Tables::class, 'install' ) ) {
+				Tables::install();
+			} elseif ( method_exists( Tables::class, 'maybe_upgrade' ) ) {
+				Tables::maybe_upgrade();
+			}
 		}
 
-		// Flush rewrite rules if CPT exists.
 		if ( function_exists( 'flush_rewrite_rules' ) ) {
 			flush_rewrite_rules();
 		}
 	}
 
 	/**
-	 * Attach hooks for the runtime lifecycle.
+	 * Attach runtime hooks.
 	 *
 	 * @return void
 	 */
 	protected function hooks() {
-		// Register CPT and related structures.
+		// Register CPT.
 		add_action(
 			'init',
 			static function () {
-				if ( class_exists( Cpt::class ) && method_exists( Cpt::class, 'register' ) ) {
-					Cpt::register();
+				if ( class_exists( Cpt::class ) ) {
+					if ( method_exists( Cpt::class, 'register' ) ) {
+						Cpt::register();
+					} elseif ( method_exists( Cpt::class, 'init' ) ) {
+						Cpt::init();
+					}
 				}
 			}
 		);
 
-		// Ensure DB tables are available.
+		// Ensure DB tables are up to date.
 		add_action(
 			'init',
 			static function () {
@@ -93,18 +112,12 @@ class Plugin {
 			}
 		);
 
-                // Admin UI (menus + screens).
-                if ( is_admin() ) {
-                        if ( class_exists( Screen_Settings::class ) && method_exists( Screen_Settings::class, 'init' ) ) {
-                                Screen_Settings::init();
-                        }
+		// Admin UI.
+		if ( is_admin() && class_exists( Admin::class ) && method_exists( Admin::class, 'init' ) ) {
+			Admin::init();
+		}
 
-                        if ( class_exists( Admin::class ) && method_exists( Admin::class, 'init' ) ) {
-                                Admin::init();
-                        }
-                }
-
-		// Reports engine.
+		// Reports engine bootstrap.
 		add_action(
 			'init',
 			static function () {
@@ -114,7 +127,7 @@ class Plugin {
 			}
 		);
 
-		// Automation (cron etc).
+		// Automation / cron.
 		add_action(
 			'init',
 			static function () {
@@ -125,34 +138,53 @@ class Plugin {
 		);
 	}
 
+	/* -------------------------------------------------
+	 * Settings helpers
+	 * -------------------------------------------------*/
 
-        /**
-         * Retrieve a stored setting from the consolidated option.
-         *
-         * @param string $key     Setting key.
-         * @param mixed  $default Default value if not set.
-         * @return mixed
-         */
-        public static function get_setting( string $key, $default = null ) {
-                $settings = get_option( 'satori_audit_settings', array() );
-                $settings = is_array( $settings ) ? $settings : array();
+	/**
+	 * Return all plugin settings.
+	 *
+	 * @return array
+	 */
+	public static function get_settings() {
+		$settings = get_option( self::SETTINGS_OPTION, array() );
 
-                return array_key_exists( $key, $settings ) ? $settings[ $key ] : $default;
-        }
+		if ( ! is_array( $settings ) ) {
+			$settings = array();
+		}
 
-        /**
-         * Update a single setting while preserving existing values.
-         *
-         * @param string $key   Setting key.
-         * @param mixed  $value Value to store.
-         * @return void
-         */
-        public static function update_setting( string $key, $value ): void {
-                $settings = get_option( 'satori_audit_settings', array() );
-                $settings = is_array( $settings ) ? $settings : array();
+		return $settings;
+	}
 
-                $settings[ $key ] = $value;
+	/**
+	 * Get a single setting by key.
+	 *
+	 * @param string $key     Setting key.
+	 * @param mixed  $default Default value if not set.
+	 * @return mixed
+	 */
+	public static function get_setting( $key, $default = null ) {
+		$settings = self::get_settings();
 
-                update_option( 'satori_audit_settings', $settings );
-        }
+		if ( array_key_exists( $key, $settings ) ) {
+			return $settings[ $key ];
+		}
+
+		return $default;
+	}
+
+	/**
+	 * Update a single setting.
+	 *
+	 * @param string $key   Setting key.
+	 * @param mixed  $value Value.
+	 * @return void
+	 */
+	public static function update_setting( $key, $value ) {
+		$settings          = self::get_settings();
+		$settings[ $key ]  = $value;
+
+		update_option( self::SETTINGS_OPTION, $settings );
+	}
 }
