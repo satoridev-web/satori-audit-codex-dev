@@ -675,21 +675,80 @@ class Screen_Settings {
 	 * Settings helpers
 	 * -------------------------------------------------*/
 
-	/**
-	 * Get settings with defaults merged in.
-	 *
-	 * @return array<string,mixed>
-	 */
-	public static function get_settings(): array {
-		$saved    = get_option( self::OPTION_KEY, array() );
-		$defaults = self::get_default_settings();
+        /**
+         * Get settings with defaults merged in.
+         *
+         * @return array<string,mixed>
+         */
+        public static function get_settings(): array {
+                $saved    = get_option( self::OPTION_KEY, array() );
+                $defaults = self::get_default_settings();
 
 		if ( ! is_array( $saved ) ) {
 			$saved = array();
 		}
 
-		return array_merge( $defaults, $saved );
-	}
+                return array_merge( $defaults, $saved );
+        }
+
+        /**
+         * Get resolved capabilities from settings.
+         *
+         * @return array{manage:string,view:string}
+         */
+        public static function get_capabilities(): array {
+                $settings = self::get_settings();
+
+                $caps = array(
+                        'manage' => isset( $settings['capability_manage'] ) && ! empty( $settings['capability_manage'] )
+                                ? (string) $settings['capability_manage']
+                                : 'manage_options',
+                        'view'   => isset( $settings['capability_view_reports'] ) && ! empty( $settings['capability_view_reports'] )
+                                ? (string) $settings['capability_view_reports']
+                                : 'manage_options',
+                );
+
+                self::log_debug(
+                        sprintf(
+                                'Resolved capabilities: manage=%s, view=%s, hide_menu_from_non_admin=%d.',
+                                $caps['manage'],
+                                $caps['view'],
+                                ! empty( $settings['hide_menu_from_non_admin'] ) ? 1 : 0
+                        ),
+                        $settings
+                );
+
+                return $caps;
+        }
+
+        /**
+         * Determine if debug mode is enabled.
+         *
+         * @param array<string,mixed>|null $settings Settings array to reuse.
+         * @return bool
+         */
+        protected static function is_debug_mode( ?array $settings = null ): bool {
+                $settings = $settings ?? self::get_settings();
+
+                return ! empty( $settings['debug_mode'] );
+        }
+
+        /**
+         * Log a debug message when debug mode is enabled.
+         *
+         * @param string                   $message  Message to log.
+         * @param array<string,mixed>|null $settings Settings array to reuse.
+         * @return void
+         */
+        public static function log_debug( string $message, ?array $settings = null ): void {
+                if ( ! self::is_debug_mode( $settings ) ) {
+                        return;
+                }
+
+                if ( function_exists( 'satori_audit_log' ) ) {
+                        satori_audit_log( $message );
+                }
+        }
 
 	/**
 	 * Default settings.
@@ -887,14 +946,18 @@ class Screen_Settings {
 	/**
 	 * Render the settings page wrapper.
 	 *
-	 * Called from Admin menu callback.
-	 *
-	 * @return void
-	 */
-	public static function render_page(): void {
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( 'You do not have permission to access this page.', 'satori-audit' ) );
-		}
+         * Called from Admin menu callback.
+         *
+         * @return void
+         */
+        public static function render_page(): void {
+                $capabilities = self::get_capabilities();
+                $manage_cap   = $capabilities['manage'];
+
+                if ( ! current_user_can( $manage_cap ) ) {
+                        self::log_debug( 'Access denied to Settings for user ID ' . get_current_user_id() . '.' );
+                        wp_die( esc_html__( 'You do not have permission to access this page.', 'satori-audit' ) );
+                }
 
 		$tabs        = self::get_tabs();
 		$current_tab = self::get_current_tab();

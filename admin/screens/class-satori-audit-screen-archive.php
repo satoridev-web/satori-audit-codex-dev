@@ -19,15 +19,23 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Render the Archive page for SATORI Audit.
  */
 class Screen_Archive {
-	/**
-	 * Display archive content.
-	 *
-	 * @return void
-	 */
-	public static function render(): void {
-		$selected_report_id = isset( $_GET['report_id'] ) ? absint( $_GET['report_id'] ) : 0;
-		$report            = $selected_report_id ? get_post( $selected_report_id ) : null;
-		$period            = $selected_report_id ? get_post_meta( $selected_report_id, '_satori_audit_period', true ) : '';
+        /**
+         * Display archive content.
+         *
+         * @return void
+         */
+        public static function render(): void {
+                $capabilities = Screen_Settings::get_capabilities();
+                $view_cap     = $capabilities['view'];
+
+                if ( ! current_user_can( $view_cap ) ) {
+                        Screen_Settings::log_debug( 'Access denied to Archive for user ID ' . get_current_user_id() . '.' );
+                        wp_die( esc_html__( 'You do not have permission to access this page.', 'satori-audit' ) );
+                }
+
+                $selected_report_id = isset( $_GET['report_id'] ) ? absint( $_GET['report_id'] ) : 0;
+                $report            = $selected_report_id ? get_post( $selected_report_id ) : null;
+                $period            = $selected_report_id ? get_post_meta( $selected_report_id, '_satori_audit_period', true ) : '';
 		$plugin_rows       = array();
 
                 if ( $selected_report_id && $report instanceof \WP_Post ) {

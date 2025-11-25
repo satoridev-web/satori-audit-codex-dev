@@ -59,69 +59,83 @@ class Admin {
 		add_action( 'admin_enqueue_scripts', array( self::class, 'enqueue_assets' ) );
 	}
 
-	/**
-	 * Register menu and submenu pages for the plugin.
-	 *
-	 * @return void
-	 */
-	public static function register_menus(): void {
-		/* -------------------------------------------------
-		 * Determine capability from settings
-		 * -------------------------------------------------*/
-		$settings   = Screen_Settings::get_settings();
-		$capability = isset( $settings['capability_manage'] ) && ! empty( $settings['capability_manage'] )
-			? (string) $settings['capability_manage']
-			: 'manage_options';
+        /**
+         * Register menu and submenu pages for the plugin.
+         *
+         * @return void
+         */
+        public static function register_menus(): void {
+                /* -------------------------------------------------
+                 * Determine capability from settings
+                 * -------------------------------------------------*/
+                $settings     = Screen_Settings::get_settings();
+                $capabilities = Screen_Settings::get_capabilities();
+                $hide_menu    = ! empty( $settings['hide_menu_from_non_admin'] );
+
+                $manage_capability = $capabilities['manage'];
+                $view_capability   = $capabilities['view'];
+                $menu_capability   = $hide_menu ? $manage_capability : $view_capability;
+
+                /* -------------------------------------------------
+                 * Top-level menu: Dashboard
+                 * -------------------------------------------------*/
+                add_menu_page(
+                        __( 'SATORI Audit', 'satori-audit' ),
+                        __( 'SATORI Audit', 'satori-audit' ),
+                        $menu_capability,
+                        'satori-audit',
+                        array( Screen_Dashboard::class, 'render' ),
+                        'dashicons-analytics',
+                        58
+                );
 
 		/* -------------------------------------------------
-		 * Top-level menu: Dashboard
-		 * -------------------------------------------------*/
-		add_menu_page(
-			__( 'SATORI Audit', 'satori-audit' ),
-			__( 'SATORI Audit', 'satori-audit' ),
-			$capability,
-			'satori-audit',
-			array( Screen_Dashboard::class, 'render' ),
-			'dashicons-analytics',
-			58
-		);
+                 * Submenu: Dashboard (default)
+                 * -------------------------------------------------*/
+                add_submenu_page(
+                        'satori-audit',
+                        __( 'Audit Dashboard', 'satori-audit' ),
+                        __( 'Dashboard', 'satori-audit' ),
+                        $menu_capability,
+                        'satori-audit',
+                        array( Screen_Dashboard::class, 'render' )
+                );
 
-		/* -------------------------------------------------
-		 * Submenu: Dashboard (default)
-		 * -------------------------------------------------*/
-		add_submenu_page(
-			'satori-audit',
-			__( 'Audit Dashboard', 'satori-audit' ),
-			__( 'Dashboard', 'satori-audit' ),
-			$capability,
-			'satori-audit',
-			array( Screen_Dashboard::class, 'render' )
-		);
+                /* -------------------------------------------------
+                 * Submenu: Archive
+                 * -------------------------------------------------*/
+                add_submenu_page(
+                        'satori-audit',
+                        __( 'Audit Archive', 'satori-audit' ),
+                        __( 'Archive', 'satori-audit' ),
+                        $menu_capability,
+                        'satori-audit-archive',
+                        array( Screen_Archive::class, 'render' )
+                );
 
-		/* -------------------------------------------------
-		 * Submenu: Archive
-		 * -------------------------------------------------*/
-		add_submenu_page(
-			'satori-audit',
-			__( 'Audit Archive', 'satori-audit' ),
-			__( 'Archive', 'satori-audit' ),
-			$capability,
-			'satori-audit-archive',
-			array( Screen_Archive::class, 'render' )
-		);
+                /* -------------------------------------------------
+                 * Submenu: Settings
+                 * -------------------------------------------------*/
+                add_submenu_page(
+                        'satori-audit',
+                        __( 'Audit Settings', 'satori-audit' ),
+                        __( 'Settings', 'satori-audit' ),
+                        $manage_capability,
+                        Screen_Settings::PAGE_SLUG,
+                        array( Screen_Settings::class, 'render_page' )
+                );
 
-		/* -------------------------------------------------
-		 * Submenu: Settings
-		 * -------------------------------------------------*/
-		add_submenu_page(
-			'satori-audit',
-			__( 'Audit Settings', 'satori-audit' ),
-			__( 'Settings', 'satori-audit' ),
-			$capability,
-			Screen_Settings::PAGE_SLUG,
-			array( Screen_Settings::class, 'render_page' )
-		);
-	}
+                Screen_Settings::log_debug(
+                        sprintf(
+                                'Menus registered with hide_menu_from_non_admin=%d (top-level capability: %s, settings capability: %s, view capability: %s).',
+                                $hide_menu ? 1 : 0,
+                                $menu_capability,
+                                $manage_capability,
+                                $view_capability
+                        ),
+                        $settings
+                );
+        }
 
 	/**
 	 * Enqueue assets for admin screens.

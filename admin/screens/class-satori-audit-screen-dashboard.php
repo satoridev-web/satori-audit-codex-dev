@@ -17,14 +17,22 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Render the Dashboard page for SATORI Audit.
  */
 class Screen_Dashboard {
-	/**
-	 * Output the dashboard screen.
-	 *
-	 * @return void
-	 */
-	public static function render(): void {
-		echo '<div class="wrap satori-audit-wrap">';
-		echo '<h1>' . esc_html__( 'SATORI Audit – Dashboard', 'satori-audit' ) . '</h1>';
+        /**
+         * Output the dashboard screen.
+         *
+         * @return void
+         */
+        public static function render(): void {
+                $capabilities = Screen_Settings::get_capabilities();
+                $view_cap     = $capabilities['view'];
+
+                if ( ! current_user_can( $view_cap ) ) {
+                        Screen_Settings::log_debug( 'Access denied to Dashboard for user ID ' . get_current_user_id() . '.' );
+                        wp_die( esc_html__( 'You do not have permission to access this page.', 'satori-audit' ) );
+                }
+
+                echo '<div class="wrap satori-audit-wrap">';
+                echo '<h1>' . esc_html__( 'SATORI Audit – Dashboard', 'satori-audit' ) . '</h1>';
 	
 		$notice = isset( $_GET['satori_audit_notice'] ) ? sanitize_key( wp_unslash( $_GET['satori_audit_notice'] ) ) : '';
 	
