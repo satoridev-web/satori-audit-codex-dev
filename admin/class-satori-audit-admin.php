@@ -11,6 +11,7 @@ namespace Satori_Audit;
 
 use Satori_Audit\Screen_Archive;
 use Satori_Audit\Screen_Dashboard;
+use Satori_Audit\Screen_Editor;
 use Satori_Audit\Screen_Settings;
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -114,6 +115,18 @@ class Admin {
                 );
 
                 /* -------------------------------------------------
+                 * Submenu: Add New Report (Template v2)
+                 * -------------------------------------------------*/
+                add_submenu_page(
+                        'satori-audit',
+                        __( 'Add New Report (Template v2)', 'satori-audit' ),
+                        __( 'Add New Report (Template v2)', 'satori-audit' ),
+                        $manage_capability,
+                        'satori-audit-report-editor',
+                        array( Screen_Editor::class, 'render' )
+                );
+
+                /* -------------------------------------------------
                  * Submenu: Settings
                  * -------------------------------------------------*/
                 add_submenu_page(
@@ -145,16 +158,25 @@ class Admin {
 	public static function enqueue_assets(): void {
 		$screen = get_current_screen();
 
-		if ( ! $screen || false === strpos( (string) $screen->base, 'satori-audit' ) ) {
-			return;
-		}
+                if ( ! $screen || false === strpos( (string) $screen->base, 'satori-audit' ) ) {
+                        return;
+                }
 
-		wp_enqueue_style(
-			'satori-audit-admin',
-			sprintf( '%1$sassets/css/admin.css', SATORI_AUDIT_URL ),
-			array(),
-			SATORI_AUDIT_VERSION
-		);
+                wp_enqueue_style(
+                        'satori-audit-admin',
+                        sprintf( '%1$sassets/css/admin.css', SATORI_AUDIT_URL ),
+                        array(),
+                        SATORI_AUDIT_VERSION
+                );
+
+                if ( false !== strpos( (string) $screen->base, Screen_Editor::PAGE_SLUG ) ) {
+                        wp_enqueue_style(
+                                'satori-audit-report-editor',
+                                sprintf( '%1$sassets/css/report-editor.css', SATORI_AUDIT_URL ),
+                                array( 'satori-audit-admin' ),
+                                SATORI_AUDIT_VERSION
+                        );
+                }
 
 		wp_enqueue_script(
 			'satori-audit-admin',

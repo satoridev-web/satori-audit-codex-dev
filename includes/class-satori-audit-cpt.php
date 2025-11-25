@@ -50,12 +50,57 @@ class Cpt {
             'show_ui'             => true,
             'show_in_menu'        => false,
             'capability_type'     => 'post',
-            'supports'            => array( 'title', 'editor', 'custom-fields' ),
+            'supports'            => array( 'title' ),
             'rewrite'             => false,
             'map_meta_cap'        => true,
             'exclude_from_search' => true,
         );
 
         register_post_type( 'satori_audit_report', $args );
+
+        add_action( 'add_meta_boxes_satori_audit_report', array( self::class, 'register_editor_metabox' ) );
+    }
+
+    /**
+     * Provide a link to the custom Report Editor UI.
+     *
+     * @return void
+     */
+    public static function register_editor_metabox(): void {
+        $capabilities = Screen_Settings::get_capabilities();
+        $manage_cap   = $capabilities['manage'];
+
+        if ( ! current_user_can( $manage_cap ) ) {
+            return;
+        }
+
+        add_meta_box(
+            'satori-audit-report-editor-link',
+            __( 'Report Editor (Template v2)', 'satori-audit' ),
+            array( self::class, 'render_editor_metabox' ),
+            'satori_audit_report',
+            'side',
+            'high'
+        );
+    }
+
+    /**
+     * Render metabox content linking to the custom editor.
+     *
+     * @param \WP_Post $post Current post.
+     * @return void
+     */
+    public static function render_editor_metabox( \WP_Post $post ): void {
+        $url = add_query_arg(
+            array(
+                'page'      => 'satori-audit-report-editor',
+                'report_id' => $post->ID,
+                'template'  => 'v2',
+            ),
+            admin_url( 'admin.php' )
+        );
+
+        echo '<p>' . esc_html__( 'Use the custom editor to manage Template v2 fields and layout.', 'satori-audit' ) . '</p>';
+        echo '<p><a class="button button-primary" href="' . esc_url( $url ) . '">' . esc_html__( 'Open Report Editor', 'satori-audit' ) . '</a></p>';
     }
 }
