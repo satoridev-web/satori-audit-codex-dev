@@ -84,9 +84,39 @@ class PDF {
      * @return string
      */
     private static function build_html( string $html, array $settings ): string {
-        $prepared = self::apply_header_footer( $html, $settings );
+        $prepared = self::ensure_document_wrapper( $html );
+        $prepared = self::apply_header_footer( $prepared, $settings );
 
         return self::absolutize_urls( $prepared );
+    }
+
+    /**
+     * Guarantee the HTML has a document wrapper for PDF engines.
+     *
+     * @param string $html Report markup.
+     * @return string
+     */
+    private static function ensure_document_wrapper( string $html ): string {
+        $has_html = str_contains( $html, '<html' );
+        $has_body = str_contains( $html, '<body' );
+
+        if ( $has_html && $has_body ) {
+            return $html;
+        }
+
+        $content = $html;
+
+        if ( $has_html ) {
+            $content = preg_replace( '/^.*?<head[^>]*>.*?<\/head>/is', '', $content );
+            $content = preg_replace( '/^.*?<html[^>]*>/is', '', $content );
+            $content = preg_replace( '/<\/html>.*$/is', '', $content );
+        }
+
+        if ( $has_body ) {
+            return '<!DOCTYPE html><html><head></head>' . $content . '</html>';
+        }
+
+        return '<!DOCTYPE html><html><head></head><body>' . $content . '</body></html>';
     }
 
     /**
