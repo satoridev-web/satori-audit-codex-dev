@@ -1,0 +1,29 @@
+{
+    "_readme": [
+        "This lock file was generated manually to record bundled dependencies for environments without Composer access."
+    ],
+    "content-hash": "00000000000000000000000000000000",
+    "packages": [
+        {
+            "name": "dompdf/dompdf",
+            "version": "2.0.4",
+            "version_normalized": "2.0.4.0",
+            "dist": {
+                "type": "path",
+                "url": "vendor/dompdf/dompdf"
+            },
+            "type": "library",
+            "license": [
+                "LGPL-2.1-or-later"
+            ],
+            "autoload": {
+                "psr-4": {
+                    "Dompdf\\": "src/"
+                }
+            },
+            "description": "Stubbed DOMPDF bundle for offline packaging"
+        }
+    ],
+    "packages-dev": [],
+    "plugin-api-version": "2.6.0"
+}

@@ -1,0 +1,8 @@
+{
+    "name": "satoridev/satori-audit",
+    "description": "SATORI Audit & Reports WordPress plugin",
+    "type": "wordpress-plugin",
+    "require": {
+        "dompdf/dompdf": "^2.0"
+    }
+}
