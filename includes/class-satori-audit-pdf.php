@@ -351,11 +351,11 @@ class PDF {
             'pdf_font_family'     => 'Helvetica',
             'pdf_logo_url'        => '',
             'pdf_footer_text'     => '',
-            'display_date_format' => 'Y-m-d',
+            'display_date_format' => 'j F Y',
             'debug_mode'          => 0,
         );
 
-        $settings = Plugin::get_settings();
+        $settings = Settings::get_settings();
 
         if ( ! is_array( $settings ) ) {
             $settings = array();

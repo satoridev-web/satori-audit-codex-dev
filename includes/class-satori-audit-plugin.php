@@ -157,15 +157,19 @@ class Plugin {
 	 *
 	 * @return array
 	 */
-	public static function get_settings() {
-		$settings = get_option( self::SETTINGS_OPTION, array() );
+        public static function get_settings() {
+                if ( class_exists( Settings::class ) ) {
+                        return Settings::get_settings();
+                }
 
-		if ( ! is_array( $settings ) ) {
-			$settings = array();
-		}
+                $settings = get_option( self::SETTINGS_OPTION, array() );
 
-		return $settings;
-	}
+                if ( ! is_array( $settings ) ) {
+                        $settings = array();
+                }
+
+                return $settings;
+        }
 
 	/**
 	 * Get a single setting by key.
@@ -174,15 +178,19 @@ class Plugin {
 	 * @param mixed  $default Default value if not set.
 	 * @return mixed
 	 */
-	public static function get_setting( $key, $default = null ) {
-		$settings = self::get_settings();
+        public static function get_setting( $key, $default = null ) {
+                if ( class_exists( Settings::class ) ) {
+                        return Settings::get_setting( $key, $default );
+                }
 
-		if ( array_key_exists( $key, $settings ) ) {
-			return $settings[ $key ];
-		}
+                $settings = self::get_settings();
 
-		return $default;
-	}
+                if ( array_key_exists( $key, $settings ) ) {
+                        return $settings[ $key ];
+                }
+
+                return $default;
+        }
 
 	/**
 	 * Update a single setting.
@@ -191,10 +199,15 @@ class Plugin {
 	 * @param mixed  $value Value.
 	 * @return void
 	 */
-	public static function update_setting( $key, $value ) {
-		$settings          = self::get_settings();
-		$settings[ $key ]  = $value;
+        public static function update_setting( $key, $value ) {
+                if ( class_exists( Settings::class ) ) {
+                        Settings::update_setting( $key, $value );
+                        return;
+                }
 
-		update_option( self::SETTINGS_OPTION, $settings );
-	}
+                $settings          = self::get_settings();
+                $settings[ $key ]  = $value;
+
+                update_option( self::SETTINGS_OPTION, $settings );
+        }
 }
