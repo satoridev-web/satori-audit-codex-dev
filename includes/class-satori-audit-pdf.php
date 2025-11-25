@@ -7,7 +7,7 @@
 
 declare( strict_types=1 );
 
-namespace Satori_Audit\Includes;
+namespace Satori_Audit;
 
 use Dompdf\Dompdf;
 use Dompdf\Options;
@@ -19,58 +19,266 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Handle PDF rendering and diagnostics.
  */
-class Satori_Audit_Pdf {
+class PDF {
     /**
      * Render a PDF for the given report.
      *
-     * @param int    $report_id Report post ID.
-     * @param string $html      HTML body to render.
+     * @param int $report_id Report post ID.
+     * @return string Full path to generated PDF, or empty string on failure.
      */
-    public function render_pdf( int $report_id, string $html ): void {
-        do_action( 'satori_audit_before_render_pdf', $report_id );
+    public static function generate_pdf( int $report_id ): string {
+        $settings = self::get_settings();
 
-        $settings = Satori_Audit_Plugin::get_settings();
-        $filename = apply_filters( 'satori_audit_pdf_filename', 'satori-audit-' . $report_id . '.pdf', $report_id );
-
-        if ( class_exists( Dompdf::class ) ) {
-            $options = new Options();
-            $options->set( 'isRemoteEnabled', true );
-            $dompdf = new Dompdf( $options );
-            $dompdf->loadHtml( $html );
-            $dompdf->setPaper( $settings['pdf_page_size'] ?: 'A4', $settings['pdf_orientation'] ?: 'portrait' );
-            $dompdf->render();
-
-            $dompdf->stream( $filename, [ 'Attachment' => true ] );
-        } else {
-            // Fallback to HTML print-friendly output.
-            nocache_headers();
-            header( 'Content-Type: text/html; charset=utf-8' );
-            header( 'Content-Disposition: inline; filename=' . $filename . '.html' );
-            echo '<style>body{font-family:Arial, sans-serif;}@media print {.no-print{display:none}}</style>';
-            echo '<div class="no-print" style="padding:12px;background:#f6f7f7;border-bottom:1px solid #ccd0d4">';
-            echo esc_html__( 'PDF engine not detected. Use your browser print dialog to save as PDF.', 'satori-audit' );
-            echo '</div>';
-            echo $html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-            exit;
+        if ( 'none' === $settings['pdf_engine'] ) {
+            self::log( 'PDF generation skipped: engine set to none.', $settings );
+            return '';
         }
 
-        do_action( 'satori_audit_after_render_pdf', $report_id );
+        $html = Reports::get_report_html( $report_id );
+        $html = self::build_html( $html, $settings );
+
+        $engine = self::load_engine( $settings );
+
+        if ( empty( $engine ) ) {
+            self::log( 'PDF generation aborted: no engine available.', $settings );
+            return '';
+        }
+
+        $upload_dir = wp_upload_dir();
+        $base_dir   = trailingslashit( $upload_dir['basedir'] ) . 'satori-audit/';
+
+        if ( ! wp_mkdir_p( $base_dir ) ) {
+            self::log( 'Failed to create PDF output directory: ' . $base_dir, $settings );
+            return '';
+        }
+
+        $filename = apply_filters( 'satori_audit_pdf_filename', 'satori-audit-' . $report_id . '.pdf', $report_id );
+        $path     = $base_dir . $filename;
+
+        if ( 'dompdf' === $engine['type'] ) {
+            /** @var Dompdf $dompdf */
+            $dompdf = $engine['instance'];
+            $dompdf->loadHtml( $html );
+            $dompdf->setPaper( $settings['pdf_paper_size'], $settings['pdf_orientation'] );
+            $dompdf->render();
+
+            file_put_contents( $path, $dompdf->output() );
+        } elseif ( 'tcpdf' === $engine['type'] ) {
+            /** @var \TCPDF $tcpdf */
+            $tcpdf = $engine['instance'];
+            $tcpdf->AddPage();
+            $tcpdf->writeHTML( $html, true, false, true, false, '' );
+            $tcpdf->Output( $path, 'F' );
+        }
+
+        self::log( 'Generated PDF using ' . strtoupper( (string) $engine['type'] ) . ': ' . $path, $settings );
+
+        return $path;
     }
 
     /**
-     * Return diagnostic info about the PDF engine.
+     * Ensure report HTML is ready for PDF output.
+     *
+     * @param string $html     Raw HTML.
+     * @param array  $settings Plugin settings.
+     * @return string
+     */
+    private static function build_html( string $html, array $settings ): string {
+        $prepared = self::apply_header_footer( $html, $settings );
+
+        return self::absolutize_urls( $prepared );
+    }
+
+    /**
+     * Apply header/footer markup.
+     *
+     * @param string $html     Report HTML.
+     * @param array  $settings Plugin settings.
+     * @return string
+     */
+    private static function apply_header_footer( string $html, array $settings ): string {
+        $logo   = '';
+        $footer = '';
+
+        if ( ! empty( $settings['pdf_logo_url'] ) ) {
+            $logo_url = self::absolutize_url( $settings['pdf_logo_url'] );
+            $logo     = '<div class="satori-pdf__header"><img src="' . esc_url( $logo_url ) . '" alt="' . esc_attr__( 'Report Logo', 'satori-audit' ) . '" /></div>';
+        }
+
+        if ( ! empty( $settings['pdf_footer_text'] ) ) {
+            $footer = '<div class="satori-pdf__footer">' . wp_kses_post( $settings['pdf_footer_text'] ) . '</div>';
+        }
+
+        if ( empty( $logo ) && empty( $footer ) ) {
+            return $html;
+        }
+
+        $style = '<style>'
+            . '.satori-pdf__header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #e5e7eb;}'
+            . '.satori-pdf__header img{max-height:48px;width:auto;}'
+            . '.satori-pdf__footer{position:fixed;bottom:0;left:0;right:0;padding:10px 16px;border-top:1px solid #e5e7eb;font-size:12px;color:#4b5563;text-align:center;background:#fff;}'
+            . 'body{margin-bottom:72px;}'
+            . '</style>';
+
+        $injected = $html;
+
+        if ( str_contains( $injected, '</head>' ) ) {
+            $injected = str_replace( '</head>', $style . '</head>', $injected );
+        } else {
+            $injected = $style . $injected;
+        }
+
+        if ( $logo ) {
+            $injected = str_replace( '<body>', '<body>' . $logo, $injected );
+        }
+
+        if ( $footer ) {
+            $injected = str_replace( '</body>', $footer . '</body>', $injected );
+        }
+
+        return $injected;
+    }
+
+    /**
+     * Convert relative URLs to absolute ones.
+     *
+     * @param string $html HTML to convert.
+     * @return string
+     */
+    private static function absolutize_urls( string $html ): string {
+        return (string) preg_replace_callback(
+            '/\b(href|src)="(?!https?:|data:|mailto:|#)([^\"]+)"/i',
+            static function ( array $matches ): string {
+                $absolute = self::absolutize_url( $matches[2] );
+
+                return $matches[1] . '="' . esc_url_raw( $absolute ) . '"';
+            },
+            $html
+        );
+    }
+
+    /**
+     * Create an absolute URL from a relative path.
+     *
+     * @param string $url URL to normalise.
+     * @return string
+     */
+    private static function absolutize_url( string $url ): string {
+        if ( empty( $url ) ) {
+            return $url;
+        }
+
+        if ( preg_match( '/^https?:\/\//i', $url ) ) {
+            return $url;
+        }
+
+        return trailingslashit( home_url() ) . ltrim( $url, '/' );
+    }
+
+    /**
+     * Load the configured PDF engine if available.
+     *
+     * @param array $settings Plugin settings.
+     * @return array{type:string,instance:object}|array
+     */
+    private static function load_engine( array $settings ): array {
+        $preference = $settings['pdf_engine'];
+        self::log( 'Attempting to load PDF engine: ' . $preference, $settings );
+
+        $candidates = array();
+
+        if ( 'dompdf' === $preference ) {
+            $candidates = array( 'dompdf', 'tcpdf' );
+        } elseif ( 'tcpdf' === $preference ) {
+            $candidates = array( 'tcpdf', 'dompdf' );
+        } else {
+            $candidates = array( $preference );
+        }
+
+        foreach ( $candidates as $engine ) {
+            if ( 'dompdf' === $engine && class_exists( Dompdf::class ) ) {
+                $options = new Options();
+                $options->set( 'isRemoteEnabled', true );
+                $options->setDefaultFont( $settings['pdf_font_family'] );
+
+                if ( $engine !== $preference ) {
+                    self::log( 'Falling back to DOMPDF engine.', $settings );
+                }
+
+                return array(
+                    'type'     => 'dompdf',
+                    'instance' => new Dompdf( $options ),
+                );
+            }
+
+            if ( 'tcpdf' === $engine && class_exists( '\\TCPDF' ) ) {
+                $orientation = 'landscape' === $settings['pdf_orientation'] ? 'L' : 'P';
+                $tcpdf       = new \TCPDF( $orientation, 'mm', $settings['pdf_paper_size'], true, 'UTF-8', false );
+                $tcpdf->SetCreator( 'Satori Audit' );
+                $tcpdf->SetAuthor( get_bloginfo( 'name' ) );
+                $tcpdf->setPrintHeader( false );
+                $tcpdf->setPrintFooter( false );
+                $tcpdf->SetMargins( 15, 18, 15 );
+                $tcpdf->SetFont( $settings['pdf_font_family'], '', 10 );
+
+                if ( $engine !== $preference ) {
+                    self::log( 'Falling back to TCPDF engine.', $settings );
+                }
+
+                return array(
+                    'type'     => 'tcpdf',
+                    'instance' => $tcpdf,
+                );
+            }
+
+            self::log( strtoupper( (string) $engine ) . ' requested but not available.', $settings );
+        }
+
+        self::log( 'No suitable PDF engine available.', $settings );
+
+        return array();
+    }
+
+    /**
+     * Log a message when debug mode is enabled.
+     *
+     * @param string $message  Message to log.
+     * @param array  $settings Plugin settings.
+     * @return void
+     */
+    private static function log( string $message, array $settings ): void {
+        if ( empty( $settings['debug_mode'] ) ) {
+            return;
+        }
+
+        if ( function_exists( 'satori_audit_log' ) ) {
+            satori_audit_log( $message );
+        }
+    }
+
+    /**
+     * Fetch plugin settings with sane defaults.
      *
      * @return array
      */
-    public function get_diagnostics(): array {
-        $dompdf_available = class_exists( Dompdf::class );
+    private static function get_settings(): array {
+        $defaults = array(
+            'pdf_engine'          => 'none',
+            'pdf_paper_size'      => 'A4',
+            'pdf_orientation'     => 'portrait',
+            'pdf_font_family'     => 'Helvetica',
+            'pdf_logo_url'        => '',
+            'pdf_footer_text'     => '',
+            'display_date_format' => 'Y-m-d',
+            'debug_mode'          => 0,
+        );
 
-        return [
-            'engine'   => $dompdf_available ? 'DOMPDF' : __( 'Browser print styles', 'satori-audit' ),
-            'status'   => $dompdf_available ? __( 'ready', 'satori-audit' ) : __( 'fallback', 'satori-audit' ),
-            'messages' => $dompdf_available
-                ? [ __( 'DOMPDF detected. Exports will render server-side.', 'satori-audit' ) ]
-                : [ __( 'DOMPDF not installed. Browser print-to-PDF fallback active.', 'satori-audit' ) ],
-        ];
+        $settings = Plugin::get_settings();
+
+        if ( ! is_array( $settings ) ) {
+            $settings = array();
+        }
+
+        return array_merge( $defaults, $settings );
     }
 }
