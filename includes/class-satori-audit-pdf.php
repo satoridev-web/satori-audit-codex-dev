@@ -34,46 +34,83 @@ class PDF {
             return '';
         }
 
-        $html = Reports::get_report_html( $report_id );
-        $html = self::build_html( $html, $settings );
+        try {
+            $html = Reports::get_report_html( $report_id );
+            $html = self::build_html( $html, $settings );
 
-        $engine = self::load_engine( $settings );
+            if ( empty( trim( $html ) ) ) {
+                self::log( 'PDF generation failed for report ' . $report_id . ': empty HTML.', $settings );
 
-        if ( empty( $engine ) ) {
-            self::log( 'PDF generation aborted: no engine available.', $settings );
+                return '';
+            }
+
+            $engine = self::load_engine( $settings );
+
+            if ( empty( $engine ) ) {
+                self::log( 'PDF generation aborted for report ' . $report_id . ': no engine available.', $settings );
+                return '';
+            }
+
+            $paper       = self::normalise_paper_size( $settings['pdf_paper_size'] );
+            $orientation = self::normalise_orientation( $settings['pdf_orientation'] );
+            $font_family = self::normalise_font_family( $settings['pdf_font_family'] );
+            $path        = self::get_pdf_output_path( $report_id );
+
+            if ( empty( $path ) ) {
+                self::log( 'Failed to determine PDF output path for report ' . $report_id . '.', $settings );
+                return '';
+            }
+
+            $output = '';
+
+            if ( 'dompdf' === $engine['type'] ) {
+                /** @var Dompdf $dompdf */
+                $dompdf = $engine['instance'];
+                $dompdf->setPaper( $paper, $orientation );
+                $dompdf->loadHtml( $html );
+                $dompdf->render();
+
+                $output = $dompdf->output();
+            } elseif ( 'tcpdf' === $engine['type'] ) {
+                /** @var \TCPDF $tcpdf */
+                $tcpdf        = $engine['instance'];
+                $tcpdf_orient = 'landscape' === $orientation ? 'L' : 'P';
+
+                $tcpdf->SetFont( $font_family, '', 10 );
+                $tcpdf->AddPage( $tcpdf_orient, $paper );
+                $tcpdf->writeHTML( $html, true, false, true, false, '' );
+
+                $output = $tcpdf->Output( '', 'S' );
+            }
+
+            if ( empty( $output ) ) {
+                self::log( 'PDF generation failed for report ' . $report_id . ': empty engine output.', $settings );
+
+                return '';
+            }
+
+            if ( false === file_put_contents( $path, $output ) ) {
+                self::log( 'Failed to write PDF for report ' . $report_id . ' to ' . $path, $settings );
+
+                return '';
+            }
+
+            self::log( 'Generated PDF for report ' . $report_id . ' using ' . strtoupper( (string) $engine['type'] ) . ': ' . $path, $settings );
+
+            return $path;
+        } catch ( \Throwable $e ) {
+            self::log(
+                sprintf(
+                    'PDF generation error for report %d (engine: %s): %s',
+                    $report_id,
+                    $settings['pdf_engine'],
+                    $e->getMessage()
+                ),
+                $settings
+            );
+
             return '';
         }
-
-        $upload_dir = wp_upload_dir();
-        $base_dir   = trailingslashit( $upload_dir['basedir'] ) . 'satori-audit/';
-
-        if ( ! wp_mkdir_p( $base_dir ) ) {
-            self::log( 'Failed to create PDF output directory: ' . $base_dir, $settings );
-            return '';
-        }
-
-        $filename = apply_filters( 'satori_audit_pdf_filename', 'satori-audit-' . $report_id . '.pdf', $report_id );
-        $path     = $base_dir . $filename;
-
-        if ( 'dompdf' === $engine['type'] ) {
-            /** @var Dompdf $dompdf */
-            $dompdf = $engine['instance'];
-            $dompdf->loadHtml( $html );
-            $dompdf->setPaper( $settings['pdf_paper_size'], $settings['pdf_orientation'] );
-            $dompdf->render();
-
-            file_put_contents( $path, $dompdf->output() );
-        } elseif ( 'tcpdf' === $engine['type'] ) {
-            /** @var \TCPDF $tcpdf */
-            $tcpdf = $engine['instance'];
-            $tcpdf->AddPage();
-            $tcpdf->writeHTML( $html, true, false, true, false, '' );
-            $tcpdf->Output( $path, 'F' );
-        }
-
-        self::log( 'Generated PDF using ' . strtoupper( (string) $engine['type'] ) . ': ' . $path, $settings );
-
-        return $path;
     }
 
     /**
@@ -214,54 +251,69 @@ class PDF {
     private static function load_engine( array $settings ): array {
         $preference = $settings['pdf_engine'];
         self::log( 'Attempting to load PDF engine: ' . $preference, $settings );
+        $font_family = self::normalise_font_family( $settings['pdf_font_family'] );
+        $dompdf_ok   = class_exists( Dompdf::class );
+        $tcpdf_ok    = class_exists( '\\TCPDF' );
 
-        $candidates = array();
-
-        if ( 'dompdf' === $preference ) {
-            $candidates = array( 'dompdf', 'tcpdf' );
-        } elseif ( 'tcpdf' === $preference ) {
-            $candidates = array( 'tcpdf', 'dompdf' );
-        } else {
-            $candidates = array( $preference );
+        if ( 'tcpdf' === $preference && ! $tcpdf_ok && $dompdf_ok ) {
+            self::log( 'TCPDF requested but unavailable, falling back to DOMPDF.', $settings );
+            $preference = 'dompdf';
         }
 
-        foreach ( $candidates as $engine ) {
-            if ( 'dompdf' === $engine && class_exists( Dompdf::class ) ) {
-                $options = new Options();
-                $options->set( 'isRemoteEnabled', true );
-                $options->setDefaultFont( $settings['pdf_font_family'] );
+        if ( 'dompdf' === $preference && $dompdf_ok ) {
+            $options = new Options();
+            $options->set( 'isRemoteEnabled', true );
+            $options->setDefaultFont( $font_family );
 
-                if ( $engine !== $preference ) {
-                    self::log( 'Falling back to DOMPDF engine.', $settings );
-                }
+            return array(
+                'type'     => 'dompdf',
+                'instance' => new Dompdf( $options ),
+            );
+        }
 
-                return array(
-                    'type'     => 'dompdf',
-                    'instance' => new Dompdf( $options ),
-                );
-            }
+        if ( 'tcpdf' === $preference && $tcpdf_ok ) {
+            $tcpdf = new \TCPDF( 'P', 'mm', 'A4', true, 'UTF-8', false );
+            $tcpdf->SetCreator( 'Satori Audit' );
+            $tcpdf->SetAuthor( get_bloginfo( 'name' ) );
+            $tcpdf->setPrintHeader( false );
+            $tcpdf->setPrintFooter( false );
+            $tcpdf->SetMargins( 15, 18, 15 );
+            $tcpdf->SetFont( $font_family, '', 10 );
 
-            if ( 'tcpdf' === $engine && class_exists( '\\TCPDF' ) ) {
-                $orientation = 'landscape' === $settings['pdf_orientation'] ? 'L' : 'P';
-                $tcpdf       = new \TCPDF( $orientation, 'mm', $settings['pdf_paper_size'], true, 'UTF-8', false );
-                $tcpdf->SetCreator( 'Satori Audit' );
-                $tcpdf->SetAuthor( get_bloginfo( 'name' ) );
-                $tcpdf->setPrintHeader( false );
-                $tcpdf->setPrintFooter( false );
-                $tcpdf->SetMargins( 15, 18, 15 );
-                $tcpdf->SetFont( $settings['pdf_font_family'], '', 10 );
+            return array(
+                'type'     => 'tcpdf',
+                'instance' => $tcpdf,
+            );
+        }
 
-                if ( $engine !== $preference ) {
-                    self::log( 'Falling back to TCPDF engine.', $settings );
-                }
+        if ( $dompdf_ok ) {
+            self::log( 'No preferred engine available; defaulting to DOMPDF.', $settings );
 
-                return array(
-                    'type'     => 'tcpdf',
-                    'instance' => $tcpdf,
-                );
-            }
+            $options = new Options();
+            $options->set( 'isRemoteEnabled', true );
+            $options->setDefaultFont( $font_family );
 
-            self::log( strtoupper( (string) $engine ) . ' requested but not available.', $settings );
+            return array(
+                'type'     => 'dompdf',
+                'instance' => new Dompdf( $options ),
+            );
+        }
+
+        if ( $tcpdf_ok ) {
+            self::log( 'No preferred engine available; defaulting to TCPDF.', $settings );
+
+            $tcpdf = new \TCPDF( 'P', 'mm', 'A4', true, 'UTF-8', false );
+            $tcpdf->SetCreator( 'Satori Audit' );
+            $tcpdf->SetAuthor( get_bloginfo( 'name' ) );
+            $tcpdf->setPrintHeader( false );
+            $tcpdf->setPrintFooter( false );
+            $tcpdf->SetMargins( 15, 18, 15 );
+            $tcpdf->SetFont( $font_family, '', 10 );
+
+            return array(
+                'type'     => 'tcpdf',
+                'instance' => $tcpdf,
+            );
         }
 
         self::log( 'No suitable PDF engine available.', $settings );
@@ -310,5 +362,66 @@ class PDF {
         }
 
         return array_merge( $defaults, $settings );
+    }
+
+    /**
+     * Normalize paper size values for supported engines.
+     *
+     * @param string $paper_size Paper size option.
+     * @return string
+     */
+    private static function normalise_paper_size( string $paper_size ): string {
+        $allowed = array( 'A4', 'Letter', 'Legal' );
+        $upper   = strtoupper( $paper_size );
+
+        return in_array( $upper, $allowed, true ) ? $upper : 'A4';
+    }
+
+    /**
+     * Normalize orientation values.
+     *
+     * @param string $orientation Orientation option.
+     * @return string
+     */
+    private static function normalise_orientation( string $orientation ): string {
+        $orientation = strtolower( $orientation );
+
+        return in_array( $orientation, array( 'portrait', 'landscape' ), true ) ? $orientation : 'portrait';
+    }
+
+    /**
+     * Normalize font family values.
+     *
+     * @param string $font_family Font option.
+     * @return string
+     */
+    private static function normalise_font_family( string $font_family ): string {
+        $font_family = trim( $font_family );
+
+        return $font_family ?: 'Helvetica';
+    }
+
+    /**
+     * Determine the output path for a generated PDF and ensure directories exist.
+     *
+     * @param int $report_id Report ID.
+     * @return string
+     */
+    private static function get_pdf_output_path( int $report_id ): string {
+        $upload_dir = wp_upload_dir();
+
+        if ( empty( $upload_dir['basedir'] ) ) {
+            return '';
+        }
+
+        $base_dir = trailingslashit( $upload_dir['basedir'] ) . 'satori-audit/reports/' . $report_id . '/';
+
+        if ( ! wp_mkdir_p( $base_dir ) ) {
+            return '';
+        }
+
+        $filename = apply_filters( 'satori_audit_pdf_filename', 'satori-audit-report-' . $report_id . '.pdf', $report_id );
+
+        return $base_dir . $filename;
     }
 }

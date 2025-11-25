@@ -33,7 +33,13 @@ if ( ! defined( 'SATORI_AUDIT_PATH' ) ) {
 }
 
 if ( ! defined( 'SATORI_AUDIT_URL' ) ) {
-	define( 'SATORI_AUDIT_URL', plugin_dir_url( __FILE__ ) );
+        define( 'SATORI_AUDIT_URL', plugin_dir_url( __FILE__ ) );
+}
+
+// Load Composer autoloader when available.
+$satori_audit_autoloader = __DIR__ . '/vendor/autoload.php';
+if ( file_exists( $satori_audit_autoloader ) ) {
+        require_once $satori_audit_autoloader;
 }
 
 /* -------------------------------------------------
