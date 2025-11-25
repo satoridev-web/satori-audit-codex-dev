@@ -144,6 +144,7 @@ class Screen_Archive {
                 $notice_key = isset( $_GET['satori_audit_notice'] ) ? sanitize_key( wp_unslash( $_GET['satori_audit_notice'] ) ) : '';
                 $trashed    = isset( $_GET['trashed'] ) ? absint( $_GET['trashed'] ) : 0;
                 $failed     = isset( $_GET['failed'] ) ? absint( $_GET['failed'] ) : 0;
+                $pdf_error  = isset( $_GET['pdf_error'] ) ? absint( $_GET['pdf_error'] ) : 0;
 
                 $selected_report_id = isset( $_GET['report_id'] ) ? absint( $_GET['report_id'] ) : 0;
                 $report            = $selected_report_id ? get_post( $selected_report_id ) : null;
@@ -179,8 +180,21 @@ class Screen_Archive {
                         }
                 }
 
+                if ( $pdf_error ) {
+                        echo '<div class="notice notice-error"><p>' . esc_html__( 'Unable to generate PDF for this report. Please check the PDF settings or logs.', 'satori-audit' ) . '</p></div>';
+                }
+
                 if ( $selected_report_id && $report instanceof \WP_Post ) {
                         $report_title = sprintf( esc_html__( 'Report Preview: %s', 'satori-audit' ), esc_html( $period ?: $report->post_title ) );
+                        $export_nonce = wp_create_nonce( 'satori_audit_export_pdf' );
+                        $export_url   = add_query_arg(
+                                array(
+                                        'action'              => 'satori_audit_export_pdf',
+                                        'report_id'           => $selected_report_id,
+                                        '_satori_audit_nonce' => $export_nonce,
+                                ),
+                                admin_url( 'admin-post.php' )
+                        );
                         echo '<h2>' . $report_title . '</h2>';
                         include SATORI_AUDIT_PATH . 'templates/admin/report-preview.php';
                         echo '</div>';
@@ -206,8 +220,10 @@ class Screen_Archive {
                         return;
                 }
 
-                $can_manage = current_user_can( $manage_cap );
-                $nonce      = wp_create_nonce( 'satori_audit_delete_report' );
+                $can_manage   = current_user_can( $manage_cap );
+                $can_export   = current_user_can( $view_cap );
+                $nonce        = wp_create_nonce( 'satori_audit_delete_report' );
+                $export_nonce = wp_create_nonce( 'satori_audit_export_pdf' );
 
                 if ( $can_manage ) {
                         echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
@@ -245,6 +261,15 @@ class Screen_Archive {
                                 admin_url( 'admin-post.php' )
                         );
 
+                        $export_url = add_query_arg(
+                                array(
+                                        'action'              => 'satori_audit_export_pdf',
+                                        'report_id'           => $archive_post->ID,
+                                        '_satori_audit_nonce' => $export_nonce,
+                                ),
+                                admin_url( 'admin-post.php' )
+                        );
+
                         echo '<tr>';
 
                         if ( $can_manage ) {
@@ -257,6 +282,10 @@ class Screen_Archive {
                         echo '<td>' . esc_html( $generated_on ) . '</td>';
                         echo '<td>';
                         echo '<a href="' . esc_url( $view_url ) . '">' . esc_html__( 'View', 'satori-audit' ) . '</a>';
+
+                        if ( $can_export ) {
+                                echo ' | <a href="' . esc_url( $export_url ) . '">' . esc_html__( 'Export PDF', 'satori-audit' ) . '</a>';
+                        }
 
                         if ( $can_manage ) {
                                 echo ' | <a href="' . esc_url( $delete_url ) . '" class="satori-audit-delete-action">' . esc_html__( 'Delete', 'satori-audit' ) . '</a>';
