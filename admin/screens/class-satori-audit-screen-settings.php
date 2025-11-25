@@ -23,7 +23,7 @@ class Screen_Settings {
 	 *
 	 * @var string
 	 */
-	const OPTION_KEY = 'satori_audit_settings';
+        const OPTION_KEY = Settings::OPTION_KEY;
 
 	/**
 	 * Base settings page slug (submenu slug).
@@ -111,15 +111,15 @@ class Screen_Settings {
 		/* -------------------------------------------------
 		 * Register main option
 		 * -------------------------------------------------*/
-		register_setting(
-			'satori_audit_settings_group',
-			self::OPTION_KEY,
-			array(
-				'type'              => 'array',
-				'sanitize_callback' => array( self::class, 'sanitize_settings' ),
-				'default'           => self::get_default_settings(),
-			)
-		);
+                register_setting(
+                        'satori_audit_settings_group',
+                        self::OPTION_KEY,
+                        array(
+                                'type'              => 'array',
+                                'sanitize_callback' => array( self::class, 'sanitize_settings' ),
+                                'default'           => self::get_default_settings(),
+                        )
+                );
 
 		/* -------------------------------------------------
 		 * SECTION: Service Details (tab: service)
@@ -594,10 +594,10 @@ class Screen_Settings {
 	 * -------------------------------------------------*/
 
 	public static function render_text_field( array $args ): void {
-		$settings    = self::get_settings();
-		$id          = $args['id'] ?? '';
-		$value       = isset( $settings[ $id ] ) ? (string) $settings[ $id ] : '';
-		$placeholder = isset( $args['placeholder'] ) ? (string) $args['placeholder'] : '';
+                $settings    = self::get_settings();
+                $id          = $args['id'] ?? '';
+                $value       = isset( $settings[ $id ] ) ? (string) $settings[ $id ] : '';
+                $placeholder = isset( $args['placeholder'] ) ? (string) $args['placeholder'] : '';
 
 		printf(
 			'<input type="text" class="regular-text" id="%1$s" name="%2$s[%1$s]" value="%3$s" placeholder="%4$s" />',
@@ -613,9 +613,9 @@ class Screen_Settings {
 	}
 
 	public static function render_textarea_field( array $args ): void {
-		$settings = self::get_settings();
-		$id       = $args['id'] ?? '';
-		$value    = isset( $settings[ $id ] ) ? (string) $settings[ $id ] : '';
+                $settings = self::get_settings();
+                $id       = $args['id'] ?? '';
+                $value    = isset( $settings[ $id ] ) ? (string) $settings[ $id ] : '';
 
 		printf(
 			'<textarea class="large-text" rows="4" id="%1$s" name="%2$s[%1$s]">%3$s</textarea>',
@@ -629,25 +629,25 @@ class Screen_Settings {
 		}
 	}
 
-	public static function render_checkbox_field( array $args ): void {
-		$settings = self::get_settings();
-		$id       = $args['id'] ?? '';
-		$checked  = ! empty( $settings[ $id ] );
+        public static function render_checkbox_field( array $args ): void {
+                $settings = self::get_settings();
+                $id       = $args['id'] ?? '';
+                $checked  = ! empty( $settings[ $id ] );
 
-		printf(
-			'<label><input type="checkbox" id="%1$s" name="%2$s[%1$s]" value="1" %3$s /> %4$s</label>',
-			esc_attr( $id ),
-			esc_attr( self::OPTION_KEY ),
-			checked( $checked, true, false ),
-			isset( $args['description'] ) ? esc_html( (string) $args['description'] ) : ''
-		);
+                printf(
+                        '<input type="hidden" name="%2$s[%1$s]" value="0" /> <label><input type="checkbox" id="%1$s" name="%2$s[%1$s]" value="1" %3$s /> %4$s</label>',
+                        esc_attr( $id ),
+                        esc_attr( self::OPTION_KEY ),
+                        checked( $checked, true, false ),
+                        isset( $args['description'] ) ? esc_html( (string) $args['description'] ) : ''
+                );
 	}
 
 	public static function render_select_field( array $args ): void {
-		$settings = self::get_settings();
-		$id       = $args['id'] ?? '';
-		$options  = $args['options'] ?? array();
-		$value    = isset( $settings[ $id ] ) ? (string) $settings[ $id ] : '';
+                $settings = self::get_settings();
+                $id       = $args['id'] ?? '';
+                $options  = $args['options'] ?? array();
+                $value    = isset( $settings[ $id ] ) ? (string) $settings[ $id ] : '';
 
 		printf(
 			'<select id="%1$s" name="%2$s[%1$s]">',
@@ -681,14 +681,7 @@ class Screen_Settings {
          * @return array<string,mixed>
          */
         public static function get_settings(): array {
-                $saved    = get_option( self::OPTION_KEY, array() );
-                $defaults = self::get_default_settings();
-
-		if ( ! is_array( $saved ) ) {
-			$saved = array();
-		}
-
-                return array_merge( $defaults, $saved );
+                return Settings::get_settings();
         }
 
         /**
@@ -755,57 +748,9 @@ class Screen_Settings {
 	 *
 	 * @return array<string,mixed>
 	 */
-	public static function get_default_settings(): array {
-		return array(
-			// Service details.
-			'service_client'                 => '',
-			'service_site_name'              => '',
-			'service_site_url'               => '',
-			'service_managed_by'             => 'SATORI',
-			'service_start_date'             => '',
-			'service_notes'                  => '',
-
-			// Notifications.
-			'notify_from_email'              => get_bloginfo( 'admin_email' ),
-			'notify_recipients'              => '',
-			'notify_subject_prefix'          => '',
-			'notify_send_on_publish'         => 0,
-			'notify_send_on_update'          => 0,
-
-			// Safelist.
-			'safelist_emails'                => '',
-			'safelist_domains'               => '',
-
-			// Access control.
-			'capability_manage'              => 'manage_options',
-			'capability_view_reports'        => 'manage_options',
-			'hide_menu_from_non_admin'       => 1,
-
-			// Automation.
-			'automation_enabled'             => 0,
-			'automation_frequency'           => 'none',
-			'automation_day_of_month'        => '1',
-			'automation_time_of_day'         => '03:00',
-			'automation_include_attachments' => 0,
-
-			// Display & PDF.
-			'display_date_format'            => 'j F Y',
-			'display_show_debug_section'     => 0,
-			'pdf_logo_url'                   => '',
-			'pdf_footer_text'                => '',
-
-			// PDF engine.
-			'pdf_engine'                     => 'none',
-			'pdf_paper_size'                 => 'A4',
-			'pdf_orientation'                => 'portrait',
-			'pdf_font_family'                => 'Helvetica',
-
-			// Diagnostics.
-			'debug_mode'                     => 0,
-			'log_to_file'                    => 0,
-			'log_retention_days'             => '90',
-		);
-	}
+        public static function get_default_settings(): array {
+                return Settings::get_default_settings();
+        }
 
 	/**
 	 * Sanitize settings before saving.
@@ -814,11 +759,12 @@ class Screen_Settings {
 	 * @return array<string,mixed>
 	 */
         public static function sanitize_settings( $input ): array {
-                $output = self::get_default_settings();
+                $current = self::get_settings();
+                $output  = $current;
 
-		if ( ! is_array( $input ) ) {
-			return $output;
-		}
+                if ( ! is_array( $input ) ) {
+                        return $output;
+                }
 
 		// Simple text fields.
 		$text_fields = array(
@@ -837,80 +783,82 @@ class Screen_Settings {
 			'notify_subject_prefix',
 		);
 
-		foreach ( $text_fields as $key ) {
-			if ( isset( $input[ $key ] ) ) {
-				$output[ $key ] = sanitize_text_field( (string) $input[ $key ] );
-			}
-		}
+                foreach ( $text_fields as $key ) {
+                        if ( array_key_exists( $key, $input ) ) {
+                                $output[ $key ] = sanitize_text_field( (string) $input[ $key ] );
+                        }
+                }
 
-		// URLs.
-		if ( isset( $input['service_site_url'] ) ) {
-			$output['service_site_url'] = esc_url_raw( (string) $input['service_site_url'] );
-		}
+                // URLs.
+                if ( array_key_exists( 'service_site_url', $input ) ) {
+                        $output['service_site_url'] = esc_url_raw( (string) $input['service_site_url'] );
+                }
 
-		if ( isset( $input['pdf_logo_url'] ) ) {
-			$output['pdf_logo_url'] = esc_url_raw( (string) $input['pdf_logo_url'] );
-		}
+                if ( array_key_exists( 'pdf_logo_url', $input ) ) {
+                        $output['pdf_logo_url'] = esc_url_raw( (string) $input['pdf_logo_url'] );
+                }
 
-		// Emails.
-		if ( isset( $input['notify_from_email'] ) ) {
-			$output['notify_from_email'] = sanitize_email( (string) $input['notify_from_email'] );
-		}
+                // Emails.
+                if ( array_key_exists( 'notify_from_email', $input ) ) {
+                        $output['notify_from_email'] = sanitize_email( (string) $input['notify_from_email'] );
+                }
 
-		if ( isset( $input['notify_recipients'] ) ) {
-			$output['notify_recipients'] = sanitize_textarea_field( (string) $input['notify_recipients'] );
-		}
+                if ( array_key_exists( 'notify_recipients', $input ) ) {
+                        $output['notify_recipients'] = sanitize_textarea_field( (string) $input['notify_recipients'] );
+                }
 
-		// Textareas.
-		if ( isset( $input['service_notes'] ) ) {
-			$output['service_notes'] = wp_kses_post( (string) $input['service_notes'] );
-		}
+                // Textareas.
+                if ( array_key_exists( 'service_notes', $input ) ) {
+                        $output['service_notes'] = wp_kses_post( (string) $input['service_notes'] );
+                }
 
-		if ( isset( $input['safelist_emails'] ) ) {
-			$output['safelist_emails'] = sanitize_textarea_field( (string) $input['safelist_emails'] );
-		}
+                if ( array_key_exists( 'safelist_emails', $input ) ) {
+                        $output['safelist_emails'] = sanitize_textarea_field( (string) $input['safelist_emails'] );
+                }
 
-		if ( isset( $input['safelist_domains'] ) ) {
-			$output['safelist_domains'] = sanitize_textarea_field( (string) $input['safelist_domains'] );
-		}
+                if ( array_key_exists( 'safelist_domains', $input ) ) {
+                        $output['safelist_domains'] = sanitize_textarea_field( (string) $input['safelist_domains'] );
+                }
 
-		if ( isset( $input['pdf_footer_text'] ) ) {
-			$output['pdf_footer_text'] = wp_kses_post( (string) $input['pdf_footer_text'] );
-		}
+                if ( array_key_exists( 'pdf_footer_text', $input ) ) {
+                        $output['pdf_footer_text'] = wp_kses_post( (string) $input['pdf_footer_text'] );
+                }
 
-		// Selects.
-		if ( isset( $input['automation_frequency'] ) ) {
-			$allowed = array( 'none', 'monthly', 'weekly' );
-			$value   = (string) $input['automation_frequency'];
-			$output['automation_frequency'] = in_array( $value, $allowed, true ) ? $value : 'none';
-		}
+                // Selects.
+                if ( array_key_exists( 'automation_frequency', $input ) ) {
+                        $allowed = array( 'none', 'monthly', 'weekly' );
+                        $value   = (string) $input['automation_frequency'];
+                        $output['automation_frequency'] = in_array( $value, $allowed, true ) ? $value : $current['automation_frequency'];
+                }
 
-		if ( isset( $input['pdf_engine'] ) ) {
-			$allowed = array( 'none', 'dompdf', 'tcpdf' );
-			$value   = (string) $input['pdf_engine'];
-			$output['pdf_engine'] = in_array( $value, $allowed, true ) ? $value : 'none';
-		}
+                if ( array_key_exists( 'pdf_engine', $input ) ) {
+                        $allowed = array( 'none', 'dompdf', 'tcpdf' );
+                        $value   = (string) $input['pdf_engine'];
+                        $output['pdf_engine'] = in_array( $value, $allowed, true ) ? $value : $current['pdf_engine'];
+                }
 
-		if ( isset( $input['pdf_orientation'] ) ) {
-			$allowed = array( 'portrait', 'landscape' );
-			$value   = (string) $input['pdf_orientation'];
-			$output['pdf_orientation'] = in_array( $value, $allowed, true ) ? $value : 'portrait';
-		}
+                if ( array_key_exists( 'pdf_orientation', $input ) ) {
+                        $allowed = array( 'portrait', 'landscape' );
+                        $value   = (string) $input['pdf_orientation'];
+                        $output['pdf_orientation'] = in_array( $value, $allowed, true ) ? $value : $current['pdf_orientation'];
+                }
 
-		// Checkboxes.
-		$checkboxes = array(
-			'notify_send_on_publish',
-			'notify_send_on_update',
-			'hide_menu_from_non_admin',
-			'automation_enabled',
-			'automation_include_attachments',
-			'display_show_debug_section',
-			'debug_mode',
-			'log_to_file',
-		);
+                // Checkboxes.
+                $checkboxes = array(
+                        'notify_send_on_publish',
+                        'notify_send_on_update',
+                        'hide_menu_from_non_admin',
+                        'automation_enabled',
+                        'automation_include_attachments',
+                        'display_show_debug_section',
+                        'debug_mode',
+                        'log_to_file',
+                );
 
                 foreach ( $checkboxes as $key ) {
-                        $output[ $key ] = ! empty( $input[ $key ] ) ? 1 : 0;
+                        if ( array_key_exists( $key, $input ) ) {
+                                $output[ $key ] = ! empty( $input[ $key ] ) ? 1 : 0;
+                        }
                 }
 
                 if ( function_exists( 'satori_audit_log' ) && ! empty( $output['debug_mode'] ) ) {

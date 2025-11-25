@@ -205,7 +205,7 @@ class Reports {
          * @return string
          */
         public static function get_report_html( int $report_id ): string {
-                $settings = self::get_settings();
+                $settings = Settings::get_settings();
 
                 self::log_debug( 'Begin rendering report HTML for ID ' . $report_id, $settings );
 
@@ -254,24 +254,7 @@ class Reports {
          * @return array
          */
         private static function get_settings(): array {
-                $defaults = array(
-                        'service_client'            => '',
-                        'service_site_name'         => get_bloginfo( 'name' ),
-                        'service_site_url'          => home_url(),
-                        'service_managed_by'        => '',
-                        'service_start_date'        => '',
-                        'display_date_format'       => 'Y-m-d',
-                        'display_show_debug_section'=> 0,
-                        'debug_mode'                => 0,
-                );
-
-                $settings = Plugin::get_settings();
-
-                if ( ! is_array( $settings ) ) {
-                        $settings = array();
-                }
-
-                return array_merge( $defaults, $settings );
+                return Settings::get_settings();
         }
 
         /**
@@ -364,9 +347,10 @@ class Reports {
          * @return string
          */
         private static function render_summary_section( int $report_id, array $settings, array $metadata ): string {
-                $date_format = self::get_date_format( $settings );
-                $report_date = ! empty( $metadata['date'] ) ? self::format_date( (string) $metadata['date'], $date_format ) : '';
-                $title       = $metadata['title'] ?? sprintf( __( 'Report #%d', 'satori-audit' ), $report_id );
+                $date_format   = self::get_date_format( $settings );
+                $report_date   = ! empty( $metadata['date'] ) ? self::format_date( (string) $metadata['date'], $date_format ) : '';
+                $title         = $metadata['title'] ?? sprintf( __( 'Report #%d', 'satori-audit' ), $report_id );
+                $service_notes = $settings['service_notes'] ?? '';
 
                 self::log_debug( 'Rendered summary section.', $settings );
 
@@ -380,6 +364,12 @@ class Reports {
                                         <p class="satori-report__summary-date"><?php echo esc_html__( 'Report Date', 'satori-audit' ); ?>: <?php echo esc_html( $report_date ); ?></p>
                                 <?php endif; ?>
                                 <p class="satori-report__summary-text"><?php echo esc_html__( 'This report highlights recent plugin updates, key site details, and diagnostic information collected for your records.', 'satori-audit' ); ?></p>
+                                <?php if ( ! empty( $service_notes ) ) : ?>
+                                        <div class="satori-report__service-notes">
+                                                <h3><?php echo esc_html__( 'Service Notes', 'satori-audit' ); ?></h3>
+                                                <div class="satori-report__service-notes-body"><?php echo wp_kses_post( $service_notes ); ?></div>
+                                        </div>
+                                <?php endif; ?>
                         </div>
                 </section>
                 <?php
@@ -499,6 +489,9 @@ class Reports {
                         .satori-audit-report-preview .satori-report__summary-title { font-size: 20px; margin: 0 0 4px; }
                         .satori-audit-report-preview .satori-report__summary-date { margin: 0 0 8px; color: #52606d; }
                         .satori-audit-report-preview .satori-report__summary-text { margin: 0; }
+                        .satori-audit-report-preview .satori-report__service-notes { margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb; }
+                        .satori-audit-report-preview .satori-report__service-notes h3 { margin: 0 0 6px; font-size: 16px; }
+                        .satori-audit-report-preview .satori-report__service-notes-body { margin: 0; color: #1f2933; }
                         .satori-audit-report-preview .satori-report__plugin-list { display: grid; gap: 12px; }
                         .satori-audit-report-preview .satori-report__plugin-update { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; background: #fff; }
                         .satori-audit-report-preview .satori-report__plugin-name { font-weight: 700; font-size: 16px; margin-bottom: 8px; }
@@ -547,7 +540,7 @@ class Reports {
                 $format = $settings['display_date_format'] ?? '';
 
                 if ( empty( $format ) || ! is_string( $format ) ) {
-                        $format = 'Y-m-d';
+                        $format = 'j F Y';
                 }
 
                 return $format;
