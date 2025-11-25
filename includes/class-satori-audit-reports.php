@@ -24,9 +24,10 @@ class Reports {
 	 *
 	 * @return void
 	 */
-	public static function init(): void {
-		add_action( 'admin_post_satori_audit_generate_report', array( self::class, 'handle_generate_request' ) );
-	}
+        public static function init(): void {
+                add_action( 'admin_post_satori_audit_generate_report', array( self::class, 'handle_generate_request' ) );
+                add_action( 'admin_post_satori_audit_export_pdf', array( self::class, 'handle_export_request' ) );
+        }
 
 	/**
 	 * Handle the admin-post request to generate the current month report.
@@ -53,9 +54,67 @@ class Reports {
 			$redirect = add_query_arg( 'satori_audit_notice', 'report_failed', $redirect );
 		}
 
-		wp_safe_redirect( $redirect );
-		exit;
-	}
+                wp_safe_redirect( $redirect );
+                exit;
+        }
+
+        /**
+         * Handle the admin-post request to export a report as PDF.
+         *
+         * @return void
+         */
+        public static function handle_export_request(): void {
+                $settings      = Screen_Settings::get_settings();
+                $capabilities  = Screen_Settings::get_capabilities();
+                $view_cap      = $capabilities['view'];
+                $nonce_name    = '_satori_audit_nonce';
+                $redirect_fall = admin_url( 'admin.php?page=satori-audit-archive' );
+
+                if ( ! current_user_can( $view_cap ) ) {
+                        Screen_Settings::log_debug( 'Export denied for user ID ' . get_current_user_id() . '.', $settings );
+                        wp_die( esc_html__( 'You do not have permission to export SATORI Audit reports.', 'satori-audit' ) );
+                }
+
+                $nonce_value = isset( $_REQUEST[ $nonce_name ] ) ? wp_unslash( $_REQUEST[ $nonce_name ] ) : '';
+
+                if ( ! $nonce_value || ! wp_verify_nonce( $nonce_value, 'satori_audit_export_pdf' ) ) {
+                        Screen_Settings::log_debug( 'Export request failed nonce verification.', $settings );
+                        wp_die( esc_html__( 'Invalid request. Please try again.', 'satori-audit' ) );
+                }
+
+                $report_id = isset( $_REQUEST['report_id'] ) ? absint( wp_unslash( $_REQUEST['report_id'] ) ) : 0;
+                $report    = $report_id ? get_post( $report_id ) : null;
+
+                if ( ! $report instanceof \WP_Post || 'satori_audit_report' !== $report->post_type ) {
+                        Screen_Settings::log_debug( 'Export request received for invalid report ID ' . $report_id . '.', $settings );
+                        self::redirect_with_pdf_error( $redirect_fall );
+                }
+
+                Screen_Settings::log_debug(
+                        sprintf(
+                                'Export request for report ID %d by user ID %d.',
+                                $report_id,
+                                get_current_user_id()
+                        ),
+                        $settings
+                );
+
+                $pdf_path = PDF::generate_pdf( (int) $report_id );
+
+                if ( empty( $pdf_path ) || ! file_exists( $pdf_path ) ) {
+                        Screen_Settings::log_debug( 'PDF generation failed for report ID ' . $report_id . '.', $settings );
+                        self::redirect_with_pdf_error( $redirect_fall );
+                }
+
+                $filename = 'satori-audit-report-' . $report_id . '.pdf';
+
+                header( 'Content-Type: application/pdf' );
+                header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
+                header( 'Content-Length: ' . (string) filesize( $pdf_path ) );
+
+                readfile( $pdf_path );
+                exit;
+        }
 
 	/**
 	 * Generate or refresh the current month report.
@@ -171,6 +230,22 @@ class Reports {
          */
         public static function render( int $report_id ): void {
                 echo self::get_report_html( $report_id );
+        }
+
+        /**
+         * Redirect back to admin with a PDF error flag.
+         *
+         * @param string $fallback_url Fallback URL if no referer is present.
+         * @return void
+         */
+        private static function redirect_with_pdf_error( string $fallback_url ): void {
+                $redirect = wp_get_referer();
+                $redirect = $redirect ? $redirect : $fallback_url;
+
+                $redirect = add_query_arg( 'pdf_error', '1', $redirect );
+
+                wp_safe_redirect( $redirect );
+                exit;
         }
 
         /**
