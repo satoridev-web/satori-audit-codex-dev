@@ -401,53 +401,46 @@ class Reports {
         }
 
         /**
-         * Wrap the provided body content in a minimal HTML document.
+         * Wrap the provided body content in a scoped preview container.
          *
          * @param string $body Report body HTML.
          * @return string
          */
         private static function wrap_html( string $body ): string {
                 $styles = '
-                        body { font-family: "Helvetica Neue", Arial, sans-serif; color: #1f2933; margin: 0; padding: 32px; line-height: 1.6; }
-                        h1, h2, h3, h4 { color: #0b3b5c; margin-top: 0; }
-                        a { color: #0b7fc2; text-decoration: none; }
-                        a:hover { text-decoration: underline; }
-                        .satori-report__header { border-bottom: 2px solid #e5e7eb; padding-bottom: 24px; margin-bottom: 24px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; }
-                        .satori-report__title { margin: 0; font-size: 28px; }
-                        .satori-report__subtitle { margin: 4px 0 0; color: #52606d; }
-                        .satori-report__meta { margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px 16px; }
-                        .satori-report__meta-row { display: flex; justify-content: space-between; border: 1px solid #e5e7eb; border-radius: 6px; padding: 8px 12px; background: #f9fafb; }
-                        .satori-report__meta-row dt { font-weight: 600; color: #52606d; }
-                        .satori-report__meta-row dd { margin: 0; text-align: right; }
-                        .satori-report__section { margin-bottom: 32px; }
-                        .satori-report__summary { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; }
-                        .satori-report__summary-title { font-size: 20px; margin: 0 0 4px; }
-                        .satori-report__summary-date { margin: 0 0 8px; color: #52606d; }
-                        .satori-report__summary-text { margin: 0; }
-                        .satori-report__plugin-list { display: grid; gap: 12px; }
-                        .satori-report__plugin-update { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; background: #fff; }
-                        .satori-report__plugin-name { font-weight: 700; font-size: 16px; margin-bottom: 8px; }
-                        .satori-report__plugin-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 4px 12px; margin: 0; padding: 0; }
-                        .satori-report__plugin-meta dt { font-weight: 600; color: #52606d; }
-                        .satori-report__plugin-meta dd { margin: 0; }
-                        .satori-report__diagnostics { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 6px 12px; margin: 0; padding: 0; }
-                        .satori-report__diagnostics dt { font-weight: 600; color: #52606d; }
-                        .satori-report__diagnostics dd { margin: 0; }
+                        .satori-audit-report-preview { font-family: "Helvetica Neue", Arial, sans-serif; color: #1f2933; padding: 32px; line-height: 1.6; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.03); }
+                        .satori-audit-report-preview h1, .satori-audit-report-preview h2, .satori-audit-report-preview h3, .satori-audit-report-preview h4 { color: #0b3b5c; margin-top: 0; }
+                        .satori-audit-report-preview a { color: #0b7fc2; text-decoration: none; }
+                        .satori-audit-report-preview a:hover { text-decoration: underline; }
+                        .satori-audit-report-preview .satori-report__header { border-bottom: 2px solid #e5e7eb; padding-bottom: 24px; margin-bottom: 24px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; }
+                        .satori-audit-report-preview .satori-report__title { margin: 0; font-size: 28px; }
+                        .satori-audit-report-preview .satori-report__subtitle { margin: 4px 0 0; color: #52606d; }
+                        .satori-audit-report-preview .satori-report__meta { margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px 16px; }
+                        .satori-audit-report-preview .satori-report__meta-row { display: flex; justify-content: space-between; border: 1px solid #e5e7eb; border-radius: 6px; padding: 8px 12px; background: #f9fafb; }
+                        .satori-audit-report-preview .satori-report__meta-row dt { font-weight: 600; color: #52606d; }
+                        .satori-audit-report-preview .satori-report__meta-row dd { margin: 0; text-align: right; }
+                        .satori-audit-report-preview .satori-report__section { margin-bottom: 32px; }
+                        .satori-audit-report-preview .satori-report__summary { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; }
+                        .satori-audit-report-preview .satori-report__summary-title { font-size: 20px; margin: 0 0 4px; }
+                        .satori-audit-report-preview .satori-report__summary-date { margin: 0 0 8px; color: #52606d; }
+                        .satori-audit-report-preview .satori-report__summary-text { margin: 0; }
+                        .satori-audit-report-preview .satori-report__plugin-list { display: grid; gap: 12px; }
+                        .satori-audit-report-preview .satori-report__plugin-update { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; background: #fff; }
+                        .satori-audit-report-preview .satori-report__plugin-name { font-weight: 700; font-size: 16px; margin-bottom: 8px; }
+                        .satori-audit-report-preview .satori-report__plugin-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 4px 12px; margin: 0; padding: 0; }
+                        .satori-audit-report-preview .satori-report__plugin-meta dt { font-weight: 600; color: #52606d; }
+                        .satori-audit-report-preview .satori-report__plugin-meta dd { margin: 0; }
+                        .satori-audit-report-preview .satori-report__diagnostics { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 6px 12px; margin: 0; padding: 0; }
+                        .satori-audit-report-preview .satori-report__diagnostics dt { font-weight: 600; color: #52606d; }
+                        .satori-audit-report-preview .satori-report__diagnostics dd { margin: 0; }
                 ';
 
                 ob_start();
                 ?>
-                <!DOCTYPE html>
-                <html lang="en">
-                        <head>
-                                <meta charset="utf-8" />
-                                <meta name="viewport" content="width=device-width, initial-scale=1" />
-                                <style><?php echo $styles; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></style>
-                        </head>
-                        <body>
-                                <?php echo $body; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
-                        </body>
-                </html>
+                <div class="satori-audit-report-preview">
+                        <style><?php echo $styles; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></style>
+                        <?php echo $body; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+                </div>
                 <?php
                 return (string) ob_get_clean();
         }
