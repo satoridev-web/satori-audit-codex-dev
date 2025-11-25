@@ -1,0 +1,134 @@
+/* Report Editor Template v2 styles */
+.satori-audit-editor-wrap {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    color: #1d2327;
+}
+
+.satori-audit-editor-topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0 16px;
+    border-bottom: 1px solid #dcdcde;
+    margin-bottom: 16px;
+}
+
+.satori-audit-editor-brand h1 {
+    margin: 0;
+    font-size: 26px;
+    line-height: 1.2;
+}
+
+.satori-audit-editor-subtitle {
+    margin: 4px 0 0;
+    color: #4b5563;
+}
+
+.satori-audit-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    background: #4f46e5;
+    color: #fff;
+    border-radius: 4px;
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+.satori-audit-pill {
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: #f3f4f6;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.satori-audit-editor-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+    gap: 16px;
+    margin-top: 12px;
+}
+
+.satori-audit-editor-main,
+.satori-audit-editor-sidebar,
+.satori-audit-editor-preview {
+    width: 100%;
+}
+
+.satori-audit-panel {
+    background: #fff;
+    border: 1px solid #dcdcde;
+    padding: 16px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    margin-bottom: 16px;
+}
+
+.satori-audit-panel h2 {
+    margin-top: 0;
+}
+
+.satori-audit-fieldset {
+    margin-bottom: 16px;
+}
+
+.satori-audit-fieldset label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+
+.satori-audit-fieldset input[type="text"],
+.satori-audit-fieldset textarea,
+.satori-audit-fieldset select,
+.satori-audit-panel input[type="date"],
+.satori-audit-panel select {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.satori-audit-metadata-stub {
+    padding: 12px;
+    border: 1px dashed #cbd5e1;
+    background: #f8fafc;
+    border-radius: 6px;
+    color: #4b5563;
+}
+
+.satori-audit-editor-preview .preview-title {
+    margin: 0 0 4px;
+    font-size: 20px;
+}
+
+.satori-audit-editor-preview .preview-date {
+    margin: 0 0 8px;
+    color: #6b7280;
+}
+
+.satori-audit-preview-live {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    padding: 12px;
+    border-radius: 6px;
+}
+
+.satori-audit-preview-partials {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.satori-audit-preview-partials section {
+    border: 1px solid #e5e7eb;
+    padding: 10px;
+    background: #fff;
+    border-radius: 4px;
+}
+
+.satori-audit-editor-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
