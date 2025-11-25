@@ -46,9 +46,14 @@ class Admin {
 		 * Screen bootstrap
 		 * -------------------------------------------------*/
 
-		// Ensure the Settings screen registers its sections and fields.
-		// This hooks into admin_init internally.
-		Screen_Settings::init();
+                // Ensure the Settings screen registers its sections and fields.
+                // This hooks into admin_init internally.
+                Screen_Settings::init();
+
+                // Bootstrap Archive screen hooks.
+                if ( method_exists( Screen_Archive::class, 'init' ) ) {
+                        Screen_Archive::init();
+                }
 
 		// If you later add ::init() methods for Dashboard / Archive,
 		// you can bootstrap them here in the same way.
