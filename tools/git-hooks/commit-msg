@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+#
+# SATORI commit message format checker
+#
+
+COMMIT_MSG_FILE="$1"
+MSG="$(cat "$COMMIT_MSG_FILE")"
+
+FIRST_LINE="$(printf "%s" "$MSG" | sed -n '1p')"
+SECOND_LINE="$(printf "%s" "$MSG" | sed -n '2p')"
+
+TYPE_REGEX='^(Feature|Fix|Refactor|Docs|Spec|Chore|Release): '
+
+if ! printf "%s" "$FIRST_LINE" | grep -Eq "$TYPE_REGEX"; then
+  echo "✖ SATORI commit hook: invalid title format."
+  echo "  Must begin with one of: Feature, Fix, Refactor, Docs, Spec, Chore, Release."
+  exit 1
+fi
+
+TITLE_LENGTH=${#FIRST_LINE}
+if [ "$TITLE_LENGTH" -gt 80 ]; then
+  echo "✖ SATORI commit hook: title line too long ($TITLE_LENGTH chars)."
+  exit 1
+fi
+
+TOTAL_LINES="$(printf "%s" "$MSG" | wc -l | tr -d ' ')"
+if [ "$TOTAL_LINES" -gt 1 ]; then
+  if [ -n "$SECOND_LINE" ]; then
+    echo "✖ SATORI commit hook: second line must be blank."
+    exit 1
+  fi
+fi
+
+exit 0

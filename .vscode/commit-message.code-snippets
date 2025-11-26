@@ -1,0 +1,17 @@
+{
+  "SATORI Commit Message": {
+    "scope": "git-commit",
+    "prefix": "satori-commit",
+    "description": "Standard SATORI commit message template",
+    "body": [
+      "${1|Feature,Fix,Refactor,Docs,Spec,Chore,Release|}: ${2:Short summary in sentence case}",
+      "",
+      "${3:Short explanation of what changed and why.}",
+      "",
+      "Includes:",
+      "- ${4:Key change 1}",
+      "- ${5:Key change 2}",
+      "- ${6:Reference to spec/issue if applicable}"
+    ]
+  }
+}
