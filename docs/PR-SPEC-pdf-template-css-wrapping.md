@@ -1,193 +1,215 @@
-# PR Spec: PDF Template CSS Wrapping & Layout — SATORI Audit
-
-**Target Branch:**  
-`main`
-
-**New Feature Branch:**  
-`codex/pdf-template-css-wrapping`
-
----
-
-## Summary
-
-After the previous PDF engine + settings binding work, PDF export now:
-
-- Successfully renders the **Template v2** report structure into PDF.
-- Includes service metadata, summary, plugin updates, and diagnostics.
-
-However, the current PDF output:
-
-- Shows raw CSS text at the top of the page (e.g. `.satori-pdf__header{display:flex;…}`).
-- Renders the rest of the report content as unstyled text further down the page.
-
-This PR must:
-
-- Ensure CSS is **embedded correctly** for DOMPDF (wrapped in a `<style>` block).
-- Prevent raw CSS from appearing as printable text.
-- Maintain (and slightly refine) the **layout** so the PDF looks like a clean, styled report.
-
-No changes are required to the **data** in the report; this is a **template/CSS wiring** and layout polish PR only.
+# PR-SPEC – PDF Template CSS Wrapping & Styling Fix
+*Slug: pdf-template-css-wrapping*  
+*Plugin: SATORI Audit*  
+*Related docs:*  
+- docs/SATORI-AUDIT-PROJECT-STATUS.md  
+- docs/SATORI-AUDIT-TEST-RUN-CHECKLIST.md  
+- docs/SATORI-AUDIT-SPEC.md (overall spec)  
 
 ---
 
-## Current Problem (Observed Behaviour)
+## 1. Overview
 
-1. The first line of the PDF page is a CSS rule, e.g.:
+**Problem:**  
+When exporting a report to PDF using **Template v2**, CSS is currently being output as **raw text in the PDF** and/or is not being correctly applied by the DOMPDF engine. The HTML admin preview is fine, but the PDF output is visually broken.
 
-   ```text
-   .satori-pdf__header{display:flex;align-items:center;justify-content:space-between;margin-b…
-   ```
+Per Master Status + v0.3.0 release notes:  
 
-2. The rest of the page contains:
+- The PDF engine uses **DOMPDF** (via Composer) tied to Template v2.   
+- Known issue: *“PDF CSS still printed as raw text (fix in progress)”* and *“DOMPDF not applying styles”*.   
 
-   - “SATORI Audit Report” heading,
-   - Site metadata (Site Name, URL, Client, Managed By, Service Start Date),
-   - Summary,
-   - Plugin Updates,
-   - Diagnostics.
+**Goal of this PR:**  
+Fix the PDF rendering pipeline so that:
 
-   But this content is effectively unstyled or poorly styled because the CSS is not being applied; it’s being printed as plain text before the HTML.
+1. **No raw CSS** is rendered as visible text in the PDF.
+2. Template v2’s report layout is **properly styled** in PDF output via DOMPDF.
+3. The HTML admin preview behaviour is **unchanged**.
 
-This strongly suggests that the CSS is concatenated as plain text with the HTML, rather than being wrapped inside a `<style>` tag in the `<head>` section of the HTML passed to DOMPDF.
-
----
-
-## Requirements
-
-### 1. Wrap CSS in `<style>` Tag for DOMPDF
-
-Locate the code that constructs the HTML passed to the PDF engine, most likely in:
-
-- `includes/class-satori-audit-pdf.php`:
-
-  - Any method that builds `$html` or `$pdf_html` for DOMPDF.
-  - Any place where CSS is concatenated as a string before/after the HTML.
-
-Change this so that:
-
-- CSS is **embedded inside `<style>` tags in the document `<head>`**, not printed as plain text.
-
-Example structure (illustrative, not prescriptive):
-
-```php
-$html = '<!DOCTYPE html><html><head>';
-$html .= '<meta charset="utf-8" />';
-$html .= '<style>' . $css . '</style>';
-$html .= '</head><body>';
-$html .= $report_html; // existing Template v2 HTML from Reports::get_report_html()
-$html .= '</body></html>';
-```
-
-Key points:
-
-- `$css` must contain only valid CSS, without stray HTML.
-- `$report_html` should be the **existing HTML** from the report renderer (Template v2).
-
-Avoid:
-
-- Prepending `$css` directly to `$report_html` as raw text.
-- Echoing CSS outside of `<style>` tags.
-
-### 2. Use the Same HTML Markup as the Admin Preview
-
-Ensure the PDF engine uses the **same HTML markup** used by the report preview template:
-
-- Continue to call the existing render method, e.g.:
-
-  ```php
-  $report_html = Reports::get_report_html( $report_id );
-  ```
-
-- Do **not** strip tags or flatten the HTML.
-- Do **not** alter the report content structure; only adjust *how* it is wrapped for DOMPDF.
-
-The goal is for the PDF to visually match the admin preview as closely as DOMPDF allows.
-
-### 3. Basic Layout / Margin Sanity
-
-While not a full design pass, make minor adjustments to ensure the PDF looks clean:
-
-- Set sensible default margins via CSS or DOMPDF config so that:
-
-  - Header is not touching the top edge.
-  - Content blocks (summary, plugin cards, diagnostics) have consistent spacing.
-
-Examples (illustrative):
-
-```css
-body.satori-audit-pdf {
-    margin: 20mm;
-    font-family: Helvetica, Arial, sans-serif;
-    font-size: 11px;
-}
-
-.satori-pdf__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 12mm;
-}
-```
-
-Constraints:
-
-- Keep any new CSS **scoped** to SATORI Audit classes (e.g., `.satori-audit-pdf`, `.satori-pdf__*`) to avoid conflicts.
-- Do not introduce page-size logic here (paper size/orientation is handled via settings and DOMPDF config from the previous PR).
-
-### 4. Preserve Existing Functionality
-
-This PR must **not**:
-
-- Change how settings are stored or retrieved.
-- Change which data appears in the report.
-- Change the export URLs, nonces, or handlers.
-- Change notifications, automation, access control, or REST API logic.
-
-It should only alter:
-
-- How CSS and HTML are combined into the final DOMPDF-ready document.
-- Minor CSS trimming / scoping required for PDF layout.
+This PR is **tightly scoped** to the PDF CSS wrapping and loading logic.
 
 ---
 
-## Files to Inspect / Touch
+## 2. Current Behaviour (As Understood)
 
-Codex should inspect and likely modify:
+- Template v2 HTML for reports is assembled by:   
+  - `includes/class-satori-audit-reports.php`  
+  - `templates/admin/report-preview.php`  
+  - `templates/report-v2/header.php`  
+  - `templates/report-v2/summary.php`  
+  - `templates/report-v2/plugin-updates.php`  
+  - `templates/report-v2/footer.php`  
 
-- `includes/class-satori-audit-pdf.php`
-  - The HTML assembly for DOMPDF.
-  - The way CSS is injected into that HTML.
+- The **same HTML** (or very similar) is passed to the **PDF engine** in:  
+  - `includes/class-satori-audit-pdf.php`  
 
-- Potentially any dedicated CSS or inline CSS helper used for PDF:
-  - For example, if a helper method returns the PDF CSS string, ensure it is used inside `<style>…</style>`.
+- DOMPDF is loaded via `composer.json` and used to generate PDFs saved in uploads.   
 
-No changes should be necessary to:
-
-- `templates/admin/report-preview.php`
-- `includes/class-satori-audit-reports.php`
-- Settings classes
-
-unless a bug is discovered that directly affects PDF HTML.
-
----
-
-## Constraints
-
-- Keep the HTML structure valid (`<!DOCTYPE html>`, `<html>`, `<head>`, `<body>`).
-- Ensure the resulting HTML is compatible with DOMPDF 2.x expectations.
-- Do not add external dependencies or require remote CSS; the CSS should be inline within the document.
+- Known issues:
+  - CSS for Template v2 is currently being injected or concatenated in a way that causes **raw CSS text** to appear in the PDF body.
+  - DOMPDF does **not consistently apply styles** (e.g., fonts, margins, layout).
 
 ---
 
-## Acceptance Criteria
+## 3. Objectives & Non-Goals
 
-- When exporting any report to PDF:
-  - The top of the PDF page **no longer shows raw CSS text**.
-  - The report content is styled according to the SATORI Audit PDF CSS (header layout, cards, headings, etc.).
-- Report content in the PDF still includes:
-  - SATORI Audit header (site metadata, client, managed by, service start).
-  - Summary section.
-  - Plugin Updates section.
-  - Diagnostics section respecting the display toggle.
-- No PHP warnings/notices/fatals are produced during PDF export.
-- No regressions in settings persistence, report content, or earlier PDF engine work.
+### 3.1 Objectives
+
+1. **Correct CSS Injection for DOMPDF**
+   - Ensure CSS is **loaded as proper styles** (inline `<style>` or external CSS that DOMPDF can read) and not printed as content.
+   - Ensure CSS is scoped so it does not break other potential PDF layouts.
+
+2. **Stabilise Template v2 Styling in PDF**
+   - Matching the HTML preview layout as closely as DOMPDF allows (within reason).
+   - Respect existing Template v2 structure (header, summary, plugin updates, footer).
+
+3. **Preserve Existing HTML Preview**
+   - Do not break `templates/admin/report-preview.php` rendering.
+   - Any changes to Template v2 should be **backwards compatible** with the preview.
+
+4. **Follow SATORI Standards**
+   - Namespacing, file naming, and commenting per SATORI Standards + Integration Guide.   
+
+### 3.2 Non-Goals
+
+- No new features to the report editor, archive, or diagnostics.
+- No changes to automation or notifications.
+- No refactor of the entire PDF engine—only what is necessary to fix CSS loading and raw text.
+
+---
+
+## 4. Implementation Requirements
+
+### 4.1 PDF Engine Integration
+
+**Target class:**
+
+- `includes/class-satori-audit-pdf.php` (exact name/path per Project Status).   
+
+**Requirements:**
+
+1. **Centralised CSS Handling**
+   - Introduce a **single, clearly named method** in the PDF class (e.g. `get_pdf_styles()` or similar) that:
+     - Assembles CSS required for Template v2 PDFs.
+     - Returns this as a string ready for `<style> … </style>` injection into the document `<head>` for DOMPDF.
+   - The method must:
+     - Avoid echoing/printing CSS directly.
+     - Be used only within the PDF generation process.
+
+2. **No Raw CSS in Output**
+   - Confirm that any CSS previously being concatenated into the HTML body is now:
+     - Inserted into `<head><style>…</style></head>` for DOMPDF; or
+     - Loaded via an external CSS file in a way DOMPDF supports (e.g. `@page` rules, absolute path handling).
+   - Ensure **no CSS text** appears as content in the generated PDF.
+
+3. **Template v2 Awareness**
+   - The PDF pipeline should take the **Template v2 HTML** (already built by the report rendering engine) and:
+     - Wrap it in a minimal, PDF-specific HTML shell (doctype, `<html>`, `<head>`, `<body>`).
+     - Inject the CSS from `get_pdf_styles()` into the `<head>`.
+
+4. **DOMPDF Compatible HTML**
+   - Make any small structural adjustments required for DOMPDF compatibility:
+     - Avoid unsupported HTML/CSS features.
+     - Ensure fonts, margins, and common elements render reliably.
+
+5. **Config Constants / Settings**
+   - Honour any existing settings that affect PDF output (location, filename pattern, orientation, paper size).
+   - Do **not** introduce new options unless absolutely necessary. If new options are required:
+     - They must be stored in `satori_audit_settings` or equivalent, per SATORI Integration Guide.   
+
+### 4.2 CSS Source & Structure
+
+**Goal:** Maintain SATORI Standards and avoid duplication.
+
+1. **CSS Location**
+   - If possible, reuse existing Template v2 CSS, or:
+   - Add a **dedicated PDF CSS file**, e.g.:  
+     - `assets/css/report-pdf.css`
+   - If a new file is created:
+     - Ensure it is properly enqueued/loaded for DOMPDF (not as a WP enqueue, but via filesystem path or inlined string).
+     - Keep it **PDF-specific** (avoid admin UI styling in this file).
+
+2. **SCSS / CSS Conventions**
+   - Follow SATORI Standards for CSS/SCSS: modular, clean, minimal duplication.   
+
+3. **Scoping**
+   - Scope PDF styles to a top-level wrapper class or ID (e.g. `.satori-audit-report-pdf`) to avoid conflicts with other potential layouts.
+
+---
+
+## 5. UI / UX Considerations
+
+- **Admin Preview (`report-preview.php`)**
+  - Must look **unchanged** after this PR.
+  - Any change to shared templates must be visually equivalent when rendered in the admin browser.
+
+- **PDF Appearance**
+  - The PDF does not have to be pixel-perfect identical to the browser preview, but:
+    - Typography, spacing, and hierarchy must be clearly readable.
+    - Section headings and summary/plugin updates layout should mirror the preview’s structure.
+
+---
+
+## 6. Testing & Acceptance Criteria
+
+Use **docs/SATORI-AUDIT-TEST-RUN-CHECKLIST.md** as the baseline, focusing on the **Report Preview & PDF Export** sections.
+
+### 6.1 Manual Test Cases
+
+1. **Generate a Report & Preview**
+   - Open any existing report or create a new one via the Editor.
+   - Confirm template v2 preview renders correctly in admin (no changes expected).
+
+2. **Export PDF from Preview**
+   - Click the **PDF Export** button from the Preview screen.
+   - **Expected:**
+     - File downloads successfully.
+     - No visible CSS code appears in the document.
+     - Layout is styled (headings distinct, sections separated, margins present).
+
+3. **Export PDF from Archive**
+   - Go to Archive screen.
+   - Export PDF from an existing report row.
+   - **Expected:** Same as above.
+
+4. **Regression: Wrong Template / Empty CSS**
+   - Ensure that no errors occur if:
+     - There is missing or malformed CSS file (defensive coding).
+     - A different template is selected in future (graceful fallback).
+
+### 6.2 Acceptance Criteria
+
+This PR is **complete** when:
+
+- [ ] No raw CSS is visible in any generated PDF.  
+- [ ] Template v2 PDFs have readable, styled layout (header, summary, plugin updates, footer).  
+- [ ] Admin HTML preview layout is unchanged.  
+- [ ] DOMPDF successfully applies the CSS without throwing errors.  
+- [ ] All changes conform to SATORI Standards (namespacing, comments, file naming).  
+- [ ] PHPCS passes for modified PHP files.  
+- [ ] CI / build workflow still passes (lint + zip).  
+
+---
+
+## 7. Technical Notes & Constraints
+
+- Keep changes **focused** on:
+  - `includes/class-satori-audit-pdf.php`
+  - Template v2 wrapper logic needed for DOMPDF
+  - Any new CSS file specifically for PDF rendering
+
+- Ensure any new helper functions live in appropriate classes/namespaces and respect the “one class per file” guideline.   
+
+- Follow SATORI commenting style, e.g.:
+
+---
+
+## 8. Out of Scope / Future Work
+
+* Automation engine and scheduled PDF generation (v0.4.x).
+* Archive delete/regenerate actions.
+* Diagnostics content expansion.
+* REST API export.
+
+These are covered by separate PR specs and roadmap items.
+
+---
