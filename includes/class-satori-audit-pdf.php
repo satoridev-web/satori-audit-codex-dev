@@ -122,6 +122,8 @@ class PDF {
      */
     private static function build_html( string $html, array $settings ): string {
         $prepared = self::ensure_document_wrapper( $html );
+        $prepared = self::add_body_class( $prepared, 'satori-audit-pdf' );
+        $prepared = self::relocate_styles_to_head( $prepared );
         $prepared = self::apply_header_footer( $prepared, $settings );
 
         return self::absolutize_urls( $prepared );
@@ -137,23 +139,106 @@ class PDF {
         $has_html = str_contains( $html, '<html' );
         $has_body = str_contains( $html, '<body' );
 
-        if ( $has_html && $has_body ) {
+        if ( ! $has_html || ! $has_body ) {
+            $content = $html;
+
+            if ( $has_html ) {
+                $content = preg_replace( '/^.*?<head[^>]*>.*?<\/head>/is', '', $content );
+                $content = preg_replace( '/^.*?<html[^>]*>/is', '', $content );
+                $content = preg_replace( '/<\/html>.*$/is', '', $content );
+            }
+
+            $html = $has_body
+                ? '<!DOCTYPE html><html><head></head>' . $content . '</html>'
+                : '<!DOCTYPE html><html><head></head><body>' . $content . '</body></html>';
+        }
+
+        if ( ! str_contains( $html, '<head' ) ) {
+            $html = preg_replace( '/<html([^>]*)>/i', '<html$1><head></head>', $html, 1 );
+        }
+
+        if ( ! preg_match( '/<meta[^>]+charset=/i', $html ) ) {
+            $html = preg_replace( '/<head(.*?)>/i', '<head$1><meta charset="utf-8" />', $html, 1 );
+        }
+
+        return $html;
+    }
+
+    /**
+     * Add a class attribute to the body tag if it is missing.
+     *
+     * @param string $html  Report HTML.
+     * @param string $class Class name to add.
+     * @return string
+     */
+    private static function add_body_class( string $html, string $class ): string {
+        if ( ! str_contains( $html, '<body' ) ) {
             return $html;
         }
 
-        $content = $html;
+        if ( preg_match( '/<body[^>]+class="([^"]*)"/i', $html, $matches ) ) {
+            $classes = explode( ' ', $matches[1] );
 
-        if ( $has_html ) {
-            $content = preg_replace( '/^.*?<head[^>]*>.*?<\/head>/is', '', $content );
-            $content = preg_replace( '/^.*?<html[^>]*>/is', '', $content );
-            $content = preg_replace( '/<\/html>.*$/is', '', $content );
+            if ( in_array( $class, $classes, true ) ) {
+                return $html;
+            }
+
+            $classes[] = $class;
+            $replacement = '<body class="' . implode( ' ', array_filter( $classes ) ) . '"';
+
+            return (string) preg_replace( '/<body[^>]+class="[^"]*"/i', $replacement, $html, 1 );
         }
 
-        if ( $has_body ) {
-            return '<!DOCTYPE html><html><head></head>' . $content . '</html>';
+        return (string) preg_replace( '/<body(.*?)>/i', '<body$1 class="' . $class . '">', $html, 1 );
+    }
+
+    /**
+     * Move any inline styles into the document head for PDF engines.
+     *
+     * @param string $html Report HTML.
+     * @return string
+     */
+    private static function relocate_styles_to_head( string $html ): string {
+        $styles = array();
+
+        $stripped = (string) preg_replace_callback(
+            '/<style[^>]*>(.*?)<\/style>/is',
+            static function ( array $matches ) use ( &$styles ): string {
+                $styles[] = trim( $matches[1] );
+
+                return '';
+            },
+            $html
+        );
+
+        $combined_styles = trim( self::get_pdf_base_styles() . '\n' . implode( '\n', $styles ) );
+
+        $style_block = '<style>' . $combined_styles . '</style>';
+
+        if ( str_contains( $stripped, '</head>' ) ) {
+            return (string) preg_replace( '/<\/head>/i', $style_block . '</head>', $stripped, 1 );
         }
 
-        return '<!DOCTYPE html><html><head></head><body>' . $content . '</body></html>';
+        return $style_block . $stripped;
+    }
+
+    /**
+     * Base PDF-specific CSS scoped to the audit template.
+     *
+     * @return string
+     */
+    private static function get_pdf_base_styles(): string {
+        return implode(
+            '',
+            array(
+                'body.satori-audit-pdf{margin:20mm;font-family:Helvetica,Arial,sans-serif;font-size:11px;color:#1f2933;background:#fff;}',
+                '.satori-audit-report-preview{padding:0;border:none;border-radius:0;box-shadow:none;}',
+                '.satori-audit-report-preview .satori-report__header{margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #e5e7eb;}',
+                '.satori-audit-report-preview .satori-report__section{margin-bottom:24px;}',
+                '.satori-audit-report-preview .satori-report__plugin-update{page-break-inside:avoid;}',
+                '.satori-audit-report-preview .satori-report__section{page-break-inside:avoid;}',
+            )
+        );
     }
 
     /**
@@ -195,8 +280,9 @@ class PDF {
             $injected = $style . $injected;
         }
 
-        if ( $logo ) {
-            $injected = str_replace( '<body>', '<body>' . $logo, $injected );
+        if ( $logo && preg_match( '/<body[^>]*>/i', $injected, $body_match ) ) {
+            $replacement = $body_match[0] . $logo;
+            $injected    = (string) preg_replace( '/<body[^>]*>/i', $replacement, $injected, 1 );
         }
 
         if ( $footer ) {
