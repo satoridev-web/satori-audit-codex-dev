@@ -505,7 +505,7 @@ class Reports {
 
                 ob_start();
                 ?>
-                <div class="satori-audit-report-preview">
+                <div class="satori-audit-report satori-audit-report-preview">
                         <style><?php echo $styles; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></style>
                         <?php echo $body; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
                 </div>

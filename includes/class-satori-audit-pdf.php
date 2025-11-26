@@ -123,7 +123,7 @@ class PDF {
     private static function build_html( string $html, array $settings ): string {
         $prepared = self::ensure_document_wrapper( $html );
         $prepared = self::add_body_class( $prepared, 'satori-audit-pdf' );
-        $prepared = self::relocate_styles_to_head( $prepared );
+        $prepared = self::inject_pdf_styles( $prepared );
         $prepared = self::apply_header_footer( $prepared, $settings );
 
         return self::absolutize_urls( $prepared );
@@ -193,52 +193,82 @@ class PDF {
     }
 
     /**
-     * Move any inline styles into the document head for PDF engines.
+     * Collect and inject PDF styles into the document head.
      *
      * @param string $html Report HTML.
      * @return string
      */
-    private static function relocate_styles_to_head( string $html ): string {
-        $styles = array();
+    private static function inject_pdf_styles( string $html ): string {
+        $inline_styles = array();
 
-        $stripped = (string) preg_replace_callback(
+        $clean_html = (string) preg_replace_callback(
             '/<style[^>]*>(.*?)<\/style>/is',
-            static function ( array $matches ) use ( &$styles ): string {
-                $styles[] = trim( $matches[1] );
+            static function ( array $matches ) use ( &$inline_styles ): string {
+                $inline_styles[] = trim( $matches[1] );
 
                 return '';
             },
             $html
         );
 
-        $combined_styles = trim( self::get_pdf_base_styles() . '\n' . implode( '\n', $styles ) );
+        $styles = array_filter(
+            array(
+                self::get_pdf_styles(),
+                implode( "\n", $inline_styles ),
+            )
+        );
 
-        $style_block = '<style>' . $combined_styles . '</style>';
+        $style_block = '<style>' . implode( "\n\n", $styles ) . '</style>';
 
-        if ( str_contains( $stripped, '</head>' ) ) {
-            return (string) preg_replace( '/<\/head>/i', $style_block . '</head>', $stripped, 1 );
+        if ( str_contains( $clean_html, '</head>' ) ) {
+            return (string) preg_replace( '/<\/head>/i', $style_block . '</head>', $clean_html, 1 );
         }
 
-        return $style_block . $stripped;
+        if ( preg_match( '/<html[^>]*>/i', $clean_html ) ) {
+            return (string) preg_replace( '/<html([^>]*)>/i', '<html$1><head>' . $style_block . '</head>', $clean_html, 1 );
+        }
+
+        return '<head>' . $style_block . '</head>' . $clean_html;
     }
 
     /**
-     * Base PDF-specific CSS scoped to the audit template.
+     * Retrieve CSS to be applied to PDF documents.
      *
      * @return string
      */
-    private static function get_pdf_base_styles(): string {
-        return implode(
-            '',
+    private static function get_pdf_styles(): string {
+        $base_styles = implode(
+            '\n',
             array(
-                'body.satori-audit-pdf{margin:20mm;font-family:Helvetica,Arial,sans-serif;font-size:11px;color:#1f2933;background:#fff;}',
-                '.satori-audit-report-preview{padding:0;border:none;border-radius:0;box-shadow:none;}',
-                '.satori-audit-report-preview .satori-report__header{margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #e5e7eb;}',
-                '.satori-audit-report-preview .satori-report__section{margin-bottom:24px;}',
-                '.satori-audit-report-preview .satori-report__plugin-update{page-break-inside:avoid;}',
-                '.satori-audit-report-preview .satori-report__section{page-break-inside:avoid;}',
+                'body.satori-audit-pdf{margin:20mm;font-family:Helvetica,Arial,sans-serif;font-size:11px;color:#1f2933;background:#fff;margin-bottom:72px;}',
+                '.satori-audit-pdf img{max-width:100%;height:auto;}',
+                '.satori-audit-pdf .satori-audit-report{color:#1f2933;}',
+                '.satori-pdf__header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #e5e7eb;}',
+                '.satori-pdf__header img{max-height:48px;width:auto;}',
+                '.satori-pdf__footer{position:fixed;bottom:0;left:0;right:0;padding:10px 16px;border-top:1px solid #e5e7eb;font-size:12px;color:#4b5563;text-align:center;background:#fff;}',
             )
         );
+
+        return trim( $base_styles . "\n" . self::get_template_styles() );
+    }
+
+    /**
+     * Load PDF template-specific CSS from disk when available.
+     *
+     * @return string
+     */
+    private static function get_template_styles(): string {
+        $path = trailingslashit( SATORI_AUDIT_PATH ) . 'assets/css/report-pdf.css';
+
+        if ( is_readable( $path ) ) {
+            $css = file_get_contents( $path );
+
+            if ( false !== $css ) {
+                return trim( $css );
+            }
+        }
+
+        return '';
     }
 
     /**
@@ -265,20 +295,7 @@ class PDF {
             return $html;
         }
 
-        $style = '<style>'
-            . '.satori-pdf__header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #e5e7eb;}'
-            . '.satori-pdf__header img{max-height:48px;width:auto;}'
-            . '.satori-pdf__footer{position:fixed;bottom:0;left:0;right:0;padding:10px 16px;border-top:1px solid #e5e7eb;font-size:12px;color:#4b5563;text-align:center;background:#fff;}'
-            . 'body{margin-bottom:72px;}'
-            . '</style>';
-
         $injected = $html;
-
-        if ( str_contains( $injected, '</head>' ) ) {
-            $injected = str_replace( '</head>', $style . '</head>', $injected );
-        } else {
-            $injected = $style . $injected;
-        }
 
         if ( $logo && preg_match( '/<body[^>]*>/i', $injected, $body_match ) ) {
             $replacement = $body_match[0] . $logo;
