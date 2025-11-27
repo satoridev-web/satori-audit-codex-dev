@@ -436,31 +436,39 @@ class Screen_Settings {
 			'A4'
 		);
 
-		self::add_select_field(
-			'pdf_orientation',
-			__( 'Orientation', 'satori-audit' ),
-			'satori_audit_section_pdf',
-			$pdfdiag_page,
-			array(
-				'portrait'  => __( 'Portrait', 'satori-audit' ),
-				'landscape' => __( 'Landscape', 'satori-audit' ),
-			),
-			__( 'Default PDF page orientation.', 'satori-audit' )
-		);
+                self::add_select_field(
+                        'pdf_orientation',
+                        __( 'Orientation', 'satori-audit' ),
+                        'satori_audit_section_pdf',
+                        $pdfdiag_page,
+                        array(
+                                'portrait'  => __( 'Portrait', 'satori-audit' ),
+                                'landscape' => __( 'Landscape', 'satori-audit' ),
+                        ),
+                        __( 'Default PDF page orientation.', 'satori-audit' )
+                );
 
-		self::add_text_field(
-			'pdf_font_family',
-			__( 'Font Family', 'satori-audit' ),
-			'satori_audit_section_pdf',
-			$pdfdiag_page,
-			__( 'Base font family supported by the chosen engine.', 'satori-audit' ),
-			'Helvetica'
-		);
+                self::add_text_field(
+                        'pdf_font_family',
+                        __( 'Font Family', 'satori-audit' ),
+                        'satori_audit_section_pdf',
+                        $pdfdiag_page,
+                        __( 'Base font family supported by the chosen engine.', 'satori-audit' ),
+                        'Helvetica'
+                );
 
-		// Diagnostics.
-		add_settings_section(
-			'satori_audit_section_diagnostics',
-			__( 'Diagnostics', 'satori-audit' ),
+                add_settings_field(
+                        'pdf_debug_html',
+                        __( 'PDF debug mode', 'satori-audit' ),
+                        array( self::class, 'render_pdf_debug_field' ),
+                        $pdfdiag_page,
+                        'satori_audit_section_pdf'
+                );
+
+                // Diagnostics.
+                add_settings_section(
+                        'satori_audit_section_diagnostics',
+                        __( 'Diagnostics', 'satori-audit' ),
 			array( self::class, 'render_diagnostics_section_intro' ),
 			$pdfdiag_page
 		);
@@ -641,7 +649,27 @@ class Screen_Settings {
                         checked( $checked, true, false ),
                         isset( $args['description'] ) ? esc_html( (string) $args['description'] ) : ''
                 );
-	}
+        }
+
+        /**
+         * Render the PDF debug mode checkbox with description.
+         *
+         * @return void
+         */
+        public static function render_pdf_debug_field(): void {
+                $settings       = self::get_settings();
+                $pdf_debug_html = ! empty( $settings['pdf_debug_html'] );
+
+                printf(
+                        '<input type="hidden" name="%1$s[pdf_debug_html]" value="0" />'
+                        . '<label><input type="checkbox" name="%1$s[pdf_debug_html]" id="satori_audit_pdf_debug_html" value="1" %2$s /> %3$s</label>'
+                        . '<p class="description">%4$s</p>',
+                        esc_attr( self::OPTION_KEY ),
+                        checked( $pdf_debug_html, true, false ),
+                        esc_html__( 'Enable PDF debug mode (output raw HTML instead of PDF for administrators).', 'satori-audit' ),
+                        esc_html__( 'For development and troubleshooting only. This bypasses DOMPDF and outputs the HTML intended for PDF generation.', 'satori-audit' )
+                );
+        }
 
 	public static function render_select_field( array $args ): void {
                 $settings = self::get_settings();
@@ -851,6 +879,7 @@ class Screen_Settings {
                         'automation_enabled',
                         'automation_include_attachments',
                         'display_show_debug_section',
+                        'pdf_debug_html',
                         'debug_mode',
                         'log_to_file',
                 );
