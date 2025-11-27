@@ -67,6 +67,7 @@ class Settings {
                         'display_show_debug_section'     => 0,
                         'pdf_logo_url'                   => '',
                         'pdf_footer_text'                => '',
+                        'pdf_debug_html'                 => 0,
 
                         // PDF engine.
                         'pdf_engine'                     => 'none',

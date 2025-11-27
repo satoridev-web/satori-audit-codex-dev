@@ -44,6 +44,10 @@ class PDF {
                 return '';
             }
 
+            if ( self::is_debug_mode( $settings ) ) {
+                self::output_debug_html( $html );
+            }
+
             $engine = self::load_engine( $settings );
 
             if ( empty( $engine ) ) {
@@ -384,6 +388,41 @@ class PDF {
         return array();
     }
 
+    /* -------------------------------------------------
+     * PDF Debug Mode: helper
+     * -------------------------------------------------*/
+    protected static function is_debug_mode( array $settings ): bool {
+
+        // Developer override (e.g., wp-config.php).
+        if ( defined( 'SATORI_AUDIT_PDF_DEBUG' ) && true === SATORI_AUDIT_PDF_DEBUG ) {
+            return is_user_logged_in() && current_user_can( 'manage_options' );
+        }
+
+        $enabled = ! empty( $settings['pdf_debug_html'] );
+
+        // Only admins can use debug mode.
+        return $enabled
+            && is_user_logged_in()
+            && current_user_can( 'manage_options' )
+            && is_admin();
+    }
+
+    /**
+     * Output assembled HTML when debug mode is enabled.
+     *
+     * @param string $html Fully assembled HTML document.
+     * @return void
+     */
+    private static function output_debug_html( string $html ): void {
+        if ( ! headers_sent() ) {
+            header( 'Content-Type: text/html; charset=utf-8' );
+        }
+
+        echo "<!-- SATORI Audit PDF Debug Mode: HTML output only -->";
+        echo $html;
+        exit;
+    }
+
     /**
      * Log a message when debug mode is enabled.
      *
@@ -414,6 +453,7 @@ class PDF {
             'pdf_font_family'     => 'Helvetica',
             'pdf_logo_url'        => '',
             'pdf_footer_text'     => '',
+            'pdf_debug_html'      => 0,
             'display_date_format' => 'j F Y',
             'debug_mode'          => 0,
         );
