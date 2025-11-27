@@ -121,114 +121,74 @@ class PDF {
      * @return string
      */
     private static function build_html( string $html, array $settings ): string {
-        $prepared = self::ensure_document_wrapper( $html );
-        $prepared = self::add_body_class( $prepared, 'satori-audit-pdf' );
-        $prepared = self::inject_pdf_styles( $prepared );
+        $content  = self::prepare_report_content( $html );
+        $prepared = self::build_pdf_html( $content );
         $prepared = self::apply_header_footer( $prepared, $settings );
 
         return self::absolutize_urls( $prepared );
     }
 
+    /* -------------------------------------------------
+     * Section: PDF HTML assembly and CSS injection
+     * -------------------------------------------------*/
+
     /**
-     * Guarantee the HTML has a document wrapper for PDF engines.
+     * Assemble the final PDF document shell.
      *
-     * @param string $html Report markup.
+     * @param string $report_html Report markup without style tags.
      * @return string
      */
-    private static function ensure_document_wrapper( string $html ): string {
-        $has_html = str_contains( $html, '<html' );
-        $has_body = str_contains( $html, '<body' );
-
-        if ( ! $has_html || ! $has_body ) {
-            $content = $html;
-
-            if ( $has_html ) {
-                $content = preg_replace( '/^.*?<head[^>]*>.*?<\/head>/is', '', $content );
-                $content = preg_replace( '/^.*?<html[^>]*>/is', '', $content );
-                $content = preg_replace( '/<\/html>.*$/is', '', $content );
-            }
-
-            $html = $has_body
-                ? '<!DOCTYPE html><html><head></head>' . $content . '</html>'
-                : '<!DOCTYPE html><html><head></head><body>' . $content . '</body></html>';
-        }
-
-        if ( ! str_contains( $html, '<head' ) ) {
-            $html = preg_replace( '/<html([^>]*)>/i', '<html$1><head></head>', $html, 1 );
-        }
-
-        if ( ! preg_match( '/<meta[^>]+charset=/i', $html ) ) {
-            $html = preg_replace( '/<head(.*?)>/i', '<head$1><meta charset="utf-8" />', $html, 1 );
-        }
+    private static function build_pdf_html( string $report_html ): string {
+        $html  = '<!DOCTYPE html><html><head>';
+        $html .= '<meta charset="utf-8">';
+        $html .= '<style>' . self::get_pdf_styles() . '</style>';
+        $html .= '</head><body class="satori-audit-pdf">';
+        $html .= '<div class="satori-audit-report satori-audit-report-pdf">';
+        $html .= $report_html;
+        $html .= '</div></body></html>';
 
         return $html;
     }
 
     /**
-     * Add a class attribute to the body tag if it is missing.
+     * Normalise report markup for PDF rendering.
      *
-     * @param string $html  Report HTML.
-     * @param string $class Class name to add.
+     * @param string $html Raw report HTML.
      * @return string
      */
-    private static function add_body_class( string $html, string $class ): string {
-        if ( ! str_contains( $html, '<body' ) ) {
-            return $html;
-        }
+    private static function prepare_report_content( string $html ): string {
+        $content = self::extract_body_content( $html );
+        $content = self::strip_style_tags( $content );
 
-        if ( preg_match( '/<body[^>]+class="([^"]*)"/i', $html, $matches ) ) {
-            $classes = explode( ' ', $matches[1] );
-
-            if ( in_array( $class, $classes, true ) ) {
-                return $html;
-            }
-
-            $classes[] = $class;
-            $replacement = '<body class="' . implode( ' ', array_filter( $classes ) ) . '"';
-
-            return (string) preg_replace( '/<body[^>]+class="[^"]*"/i', $replacement, $html, 1 );
-        }
-
-        return (string) preg_replace( '/<body(.*?)>/i', '<body$1 class="' . $class . '">', $html, 1 );
+        return str_replace( 'satori-audit-report-preview', 'satori-audit-report-pdf', $content );
     }
 
     /**
-     * Collect and inject PDF styles into the document head.
+     * Extract body contents when a full document is provided.
+     *
+     * @param string $html Raw report HTML.
+     * @return string
+     */
+    private static function extract_body_content( string $html ): string {
+        if ( preg_match( '/<body[^>]*>(.*?)<\/body>/is', $html, $matches ) ) {
+            return trim( $matches[1] );
+        }
+
+        if ( preg_match( '/<html[^>]*>(.*?)<\/html>/is', $html, $matches ) ) {
+            return trim( $matches[1] );
+        }
+
+        return trim( $html );
+    }
+
+    /**
+     * Remove inline style tags from report markup.
      *
      * @param string $html Report HTML.
      * @return string
      */
-    private static function inject_pdf_styles( string $html ): string {
-        $inline_styles = array();
-
-        $clean_html = (string) preg_replace_callback(
-            '/<style[^>]*>(.*?)<\/style>/is',
-            static function ( array $matches ) use ( &$inline_styles ): string {
-                $inline_styles[] = trim( $matches[1] );
-
-                return '';
-            },
-            $html
-        );
-
-        $styles = array_filter(
-            array(
-                self::get_pdf_styles(),
-                implode( "\n", $inline_styles ),
-            )
-        );
-
-        $style_block = '<style>' . implode( "\n\n", $styles ) . '</style>';
-
-        if ( str_contains( $clean_html, '</head>' ) ) {
-            return (string) preg_replace( '/<\/head>/i', $style_block . '</head>', $clean_html, 1 );
-        }
-
-        if ( preg_match( '/<html[^>]*>/i', $clean_html ) ) {
-            return (string) preg_replace( '/<html([^>]*)>/i', '<html$1><head>' . $style_block . '</head>', $clean_html, 1 );
-        }
-
-        return '<head>' . $style_block . '</head>' . $clean_html;
+    private static function strip_style_tags( string $html ): string {
+        return (string) preg_replace( '/<style[^>]*>.*?<\/style>/is', '', $html );
     }
 
     /**
