@@ -1,5 +1,4 @@
-body.satori-audit-pdf {
-    margin: 20mm;
+.satori-audit-pdf {
     font-family: "Helvetica Neue", Arial, sans-serif;
     font-size: 11px;
     line-height: 1.5;
@@ -7,36 +6,33 @@ body.satori-audit-pdf {
     background: #fff;
 }
 
-.satori-audit-pdf img {
-    max-width: 100%;
-    height: auto;
-}
-
-.satori-audit-pdf .satori-audit-report {
+.satori-audit-report-pdf {
     color: #1f2933;
+    padding: 0;
+    margin: 0;
 }
 
-.satori-audit-pdf .satori-audit-report h1,
-.satori-audit-pdf .satori-audit-report h2,
-.satori-audit-pdf .satori-audit-report h3,
-.satori-audit-pdf .satori-audit-report h4,
-.satori-audit-pdf .satori-audit-report h5,
-.satori-audit-pdf .satori-audit-report h6 {
+.satori-audit-report-pdf h1,
+.satori-audit-report-pdf h2,
+.satori-audit-report-pdf h3,
+.satori-audit-report-pdf h4,
+.satori-audit-report-pdf h5,
+.satori-audit-report-pdf h6 {
     color: #0b3b5c;
     margin: 0 0 8px;
     line-height: 1.2;
 }
 
-.satori-audit-pdf .satori-audit-report a {
+.satori-audit-report-pdf a {
     color: #0b7fc2;
     text-decoration: none;
 }
 
-.satori-audit-pdf .satori-audit-report a:hover {
+.satori-audit-report-pdf a:hover {
     text-decoration: underline;
 }
 
-.satori-audit-pdf .satori-audit-report__header {
+.satori-audit-report-pdf .satori-audit-report__header {
     border-bottom: 2px solid #e5e7eb;
     padding-bottom: 24px;
     margin-bottom: 24px;
@@ -129,12 +125,12 @@ body.satori-audit-pdf {
     margin: 0;
 }
 
-.satori-audit-pdf .satori-report__plugin-list {
+.satori-audit-report-pdf .satori-report__plugin-list {
     display: grid;
     gap: 12px;
 }
 
-.satori-audit-pdf .satori-report__plugin-update {
+.satori-audit-report-pdf .satori-report__plugin-update {
     border: 1px solid #e5e7eb;
     border-radius: 8px;
     padding: 12px;
@@ -142,13 +138,13 @@ body.satori-audit-pdf {
     page-break-inside: avoid;
 }
 
-.satori-audit-pdf .satori-report__plugin-name {
+.satori-audit-report-pdf .satori-report__plugin-name {
     font-weight: 700;
     font-size: 16px;
     margin-bottom: 8px;
 }
 
-.satori-audit-pdf .satori-report__plugin-meta {
+.satori-audit-report-pdf .satori-report__plugin-meta {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
     gap: 4px 12px;
@@ -156,16 +152,16 @@ body.satori-audit-pdf {
     padding: 0;
 }
 
-.satori-audit-pdf .satori-report__plugin-meta dt {
+.satori-audit-report-pdf .satori-report__plugin-meta dt {
     font-weight: 600;
     color: #52606d;
 }
 
-.satori-audit-pdf .satori-report__plugin-meta dd {
+.satori-audit-report-pdf .satori-report__plugin-meta dd {
     margin: 0;
 }
 
-.satori-audit-pdf .satori-report__diagnostics {
+.satori-audit-report-pdf .satori-report__diagnostics {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 6px 12px;
@@ -173,22 +169,13 @@ body.satori-audit-pdf {
     padding: 0;
 }
 
-.satori-audit-pdf .satori-report__diagnostics dt {
+.satori-audit-report-pdf .satori-report__diagnostics dt {
     font-weight: 600;
     color: #52606d;
 }
 
-.satori-audit-pdf .satori-report__diagnostics dd {
+.satori-audit-report-pdf .satori-report__diagnostics dd {
     margin: 0;
-}
-
-.satori-audit-pdf .satori-pdf__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 16px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid #e5e7eb;
 }
 
 .satori-audit-pdf .satori-pdf__header img {

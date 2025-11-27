@@ -123,7 +123,9 @@ class PDF {
     private static function build_html( string $html, array $settings ): string {
         $prepared = self::ensure_document_wrapper( $html );
         $prepared = self::add_body_class( $prepared, 'satori-audit-pdf' );
+        $prepared = self::replace_preview_wrapper( $prepared );
         $prepared = self::inject_pdf_styles( $prepared );
+        $prepared = self::wrap_pdf_body( $prepared );
         $prepared = self::apply_header_footer( $prepared, $settings );
 
         return self::absolutize_urls( $prepared );
@@ -240,7 +242,9 @@ class PDF {
         $base_styles = implode(
             '\n',
             array(
-                'body.satori-audit-pdf{margin:20mm;font-family:Helvetica,Arial,sans-serif;font-size:11px;color:#1f2933;background:#fff;margin-bottom:72px;}',
+                '@page { margin: 15mm 15mm 20mm 15mm; }',
+                'body.satori-audit-pdf{margin:0;font-family:Helvetica,Arial,sans-serif;font-size:11px;color:#1f2933;background:#fff;}',
+                'body.satori-audit-pdf .satori-audit-report-pdf{margin-bottom:48px;}',
                 '.satori-audit-pdf img{max-width:100%;height:auto;}',
                 '.satori-audit-pdf .satori-audit-report{color:#1f2933;}',
                 '.satori-pdf__header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #e5e7eb;}',
@@ -269,6 +273,43 @@ class PDF {
         }
 
         return '';
+    }
+
+    /**
+     * Ensure the preview wrapper is converted to the PDF variant.
+     *
+     * @param string $html Report HTML.
+     * @return string
+     */
+    private static function replace_preview_wrapper( string $html ): string {
+        return str_replace(
+            'satori-audit-report-preview',
+            'satori-audit-report-pdf',
+            $html
+        );
+    }
+
+    /**
+     * Wrap the report body with a predictable PDF container.
+     *
+     * @param string $html Report HTML.
+     * @return string
+     */
+    private static function wrap_pdf_body( string $html ): string {
+        if ( ! preg_match( '/<div([^>]*)class="([^"]*satori-audit-report[^"]*)"([^>]*)>/i', $html, $matches ) ) {
+            return $html;
+        }
+
+        $existing_classes = preg_split( '/\s+/', trim( $matches[2] ) );
+
+        if ( ! in_array( 'satori-audit-report-pdf', $existing_classes, true ) ) {
+            $existing_classes[] = 'satori-audit-report-pdf';
+        }
+
+        $updated_class = ' class="' . trim( implode( ' ', array_filter( $existing_classes ) ) ) . '"';
+        $replacement  = '<div' . $matches[1] . $updated_class . $matches[3] . '>';
+
+        return (string) preg_replace( '/<div([^>]*)class="([^"]*satori-audit-report[^"]*)"([^>]*)>/i', $replacement, $html, 1 );
     }
 
     /**
