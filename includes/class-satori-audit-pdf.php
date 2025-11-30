@@ -315,84 +315,185 @@ class PDF {
 		return trailingslashit( home_url() ) . ltrim( $url, '/' );
 	}
 
-	/**
-	 * Load the configured PDF engine if available.
-	 *
-	 * @param array $settings Plugin settings.
-	 * @return array{type:string,instance:object}|array
-	 */
-	private static function load_engine( array $settings ): array {
-		$preference = $settings['pdf_engine'];
-		self::log( 'Attempting to load PDF engine: ' . $preference, $settings );
-		$font_family = self::normalise_font_family( $settings['pdf_font_family'] );
-		$dompdf_ok   = class_exists( Dompdf::class );
-		$tcpdf_ok    = class_exists( '\\TCPDF' );
+        /**
+         * Load the configured PDF engine if available.
+         *
+         * @param array $settings Plugin settings.
+         * @return array{type:string,instance:object}|array
+         */
+        private static function load_engine( array $settings ): array {
+                $raw_preference = (string) $settings['pdf_engine'];
+                $preference     = self::normalise_engine_preference( $raw_preference );
 
-		if ( 'tcpdf' === $preference && ! $tcpdf_ok && $dompdf_ok ) {
-			self::log( 'TCPDF requested but unavailable, falling back to DOMPDF.', $settings );
-			$preference = 'dompdf';
-		}
+                if ( $preference !== $raw_preference ) {
+                        self::log( 'Unknown PDF engine preference "' . $raw_preference . '" normalised to automatic.', $settings );
+                }
 
-		if ( 'dompdf' === $preference && $dompdf_ok ) {
-			$options = new Options();
-			$options->set( 'isRemoteEnabled', true );
-			$options->setDefaultFont( $font_family );
+                self::log( 'Attempting to load PDF engine: ' . $preference, $settings );
 
-			return array(
-				'type'     => 'dompdf',
-				'instance' => new Dompdf( $options ),
-			);
-		}
+                if ( 'none' === $preference ) {
+                        self::log( 'PDF engine is disabled via settings.', $settings );
 
-		if ( 'tcpdf' === $preference && $tcpdf_ok ) {
-			$tcpdf = new \TCPDF( 'P', 'mm', 'A4', true, 'UTF-8', false );
-			$tcpdf->SetCreator( 'Satori Audit' );
-			$tcpdf->SetAuthor( get_bloginfo( 'name' ) );
-			$tcpdf->setPrintHeader( false );
-			$tcpdf->setPrintFooter( false );
-			$tcpdf->SetMargins( 15, 18, 15 );
-			$tcpdf->SetFont( $font_family, '', 10 );
+                        return array();
+                }
 
-			return array(
-				'type'     => 'tcpdf',
-				'instance' => $tcpdf,
-			);
-		}
+                $tcpdf = self::init_tcpdf( $settings );
+                $dompdf = self::init_dompdf( $settings );
 
-		if ( $dompdf_ok ) {
-			self::log( 'No preferred engine available; defaulting to DOMPDF.', $settings );
+                if ( 'automatic' === $preference ) {
+                        if ( ! empty( $tcpdf ) ) {
+                                self::log( 'Automatic mode selected TCPDF.', $settings );
 
-			$options = new Options();
-			$options->set( 'isRemoteEnabled', true );
-			$options->setDefaultFont( $font_family );
+                                return $tcpdf;
+                        }
 
-			return array(
-				'type'     => 'dompdf',
-				'instance' => new Dompdf( $options ),
-			);
-		}
+                        if ( ! empty( $dompdf ) ) {
+                                self::log( 'Automatic mode falling back to DOMPDF.', $settings );
 
-		if ( $tcpdf_ok ) {
-			self::log( 'No preferred engine available; defaulting to TCPDF.', $settings );
+                                return $dompdf;
+                        }
+                }
 
-			$tcpdf = new \TCPDF( 'P', 'mm', 'A4', true, 'UTF-8', false );
-			$tcpdf->SetCreator( 'Satori Audit' );
-			$tcpdf->SetAuthor( get_bloginfo( 'name' ) );
-			$tcpdf->setPrintHeader( false );
-			$tcpdf->setPrintFooter( false );
-			$tcpdf->SetMargins( 15, 18, 15 );
-			$tcpdf->SetFont( $font_family, '', 10 );
+                if ( 'tcpdf' === $preference ) {
+                        if ( ! empty( $tcpdf ) ) {
+                                return $tcpdf;
+                        }
 
-			return array(
-				'type'     => 'tcpdf',
-				'instance' => $tcpdf,
-			);
-		}
+                        self::log( 'TCPDF requested but unavailable; attempting DOMPDF fallback.', $settings );
 
-		self::log( 'No suitable PDF engine available.', $settings );
+                        if ( ! empty( $dompdf ) ) {
+                                return $dompdf;
+                        }
+                }
 
-		return array();
-	}
+                if ( 'dompdf' === $preference ) {
+                        if ( ! empty( $dompdf ) ) {
+                                return $dompdf;
+                        }
+
+                        self::log( 'DOMPDF requested but unavailable; attempting TCPDF fallback.', $settings );
+
+                        if ( ! empty( $tcpdf ) ) {
+                                return $tcpdf;
+                        }
+                }
+
+                if ( ! empty( $tcpdf ) ) {
+                        self::log( 'No preferred engine available; defaulting to TCPDF.', $settings );
+
+                        return $tcpdf;
+                }
+
+                if ( ! empty( $dompdf ) ) {
+                        self::log( 'No preferred engine available; defaulting to DOMPDF.', $settings );
+
+                        return $dompdf;
+                }
+
+                self::log( 'No suitable PDF engine available after all attempts.', $settings );
+
+                return array();
+        }
+
+        /**
+         * Initialize the TCPDF engine when present.
+         *
+         * @param array $settings Plugin settings.
+         * @return array{type:string,instance:object}|array
+         */
+        private static function init_tcpdf( array $settings ): array {
+                $font_family = self::normalise_font_family( $settings['pdf_font_family'] );
+
+                self::maybe_include_tcpdf( $settings );
+
+                if ( ! class_exists( '\\TCPDF' ) ) {
+                        self::log( 'TCPDF class not found after bootstrap attempt.', $settings );
+
+                        return array();
+                }
+
+                $tcpdf = new \TCPDF( 'P', 'mm', 'A4', true, 'UTF-8', false );
+                $tcpdf->SetCreator( 'Satori Audit' );
+                $tcpdf->SetAuthor( get_bloginfo( 'name' ) );
+                $tcpdf->setPrintHeader( false );
+                $tcpdf->setPrintFooter( false );
+                $tcpdf->SetMargins( 15, 18, 15 );
+                $tcpdf->SetFont( $font_family, '', 10 );
+
+                return array(
+                        'type'     => 'tcpdf',
+                        'instance' => $tcpdf,
+                );
+        }
+
+        /**
+         * Initialize the DOMPDF engine when present.
+         *
+         * @param array $settings Plugin settings.
+         * @return array{type:string,instance:object}|array
+         */
+        private static function init_dompdf( array $settings ): array {
+                $font_family = self::normalise_font_family( $settings['pdf_font_family'] );
+
+                if ( ! class_exists( Dompdf::class ) ) {
+                        self::log( 'DOMPDF class not found.', $settings );
+
+                        return array();
+                }
+
+                $options = new Options();
+                $options->set( 'isRemoteEnabled', true );
+                $options->setDefaultFont( $font_family );
+
+                return array(
+                        'type'     => 'dompdf',
+                        'instance' => new Dompdf( $options ),
+                );
+        }
+
+        /**
+         * Attempt to bootstrap TCPDF from Composer or the bundled fallback.
+         *
+         * @param array $settings Plugin settings.
+         * @return void
+         */
+        private static function maybe_include_tcpdf( array $settings ): void {
+                if ( class_exists( '\\TCPDF' ) ) {
+                        return;
+                }
+
+                $paths = array(
+                        trailingslashit( SATORI_AUDIT_PATH ) . 'vendor/tecnickcom/tcpdf/tcpdf.php',
+                        trailingslashit( SATORI_AUDIT_PATH ) . 'includes/vendor/tcpdf/tcpdf.php',
+                );
+
+                foreach ( $paths as $path ) {
+                        if ( is_readable( $path ) ) {
+                                self::log( 'Attempting to load TCPDF from ' . $path, $settings );
+                                require_once $path;
+
+                                if ( class_exists( '\\TCPDF' ) ) {
+                                        return;
+                                }
+                        }
+                }
+        }
+
+        /**
+         * Normalise the engine preference value.
+         *
+         * @param string $preference Raw preference value.
+         * @return string
+         */
+        private static function normalise_engine_preference( string $preference ): string {
+                $allowed = array( 'automatic', 'tcpdf', 'dompdf', 'none' );
+
+                if ( in_array( $preference, $allowed, true ) ) {
+                        return $preference;
+                }
+
+                return 'automatic';
+        }
 
 	/* -------------------------------------------------
 	 * PDF Debug Mode: helper
@@ -482,7 +583,7 @@ class PDF {
 	 */
 	private static function get_settings(): array {
 		$defaults = array(
-			'pdf_engine'          => 'none',
+                        'pdf_engine'          => 'automatic',
 			'pdf_paper_size'      => 'A4',
 			'pdf_orientation'     => 'portrait',
 			'pdf_font_family'     => 'Helvetica',
