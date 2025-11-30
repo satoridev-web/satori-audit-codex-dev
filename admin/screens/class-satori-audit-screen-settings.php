@@ -414,18 +414,19 @@ class Screen_Settings {
 			$pdfdiag_page
 		);
 
-		self::add_select_field(
-			'pdf_engine',
-			__( 'Engine', 'satori-audit' ),
-			'satori_audit_section_pdf',
-			$pdfdiag_page,
-			array(
-				'none'   => __( 'Disabled', 'satori-audit' ),
-				'dompdf' => __( 'DOMPDF', 'satori-audit' ),
-				'tcpdf'  => __( 'TCPDF', 'satori-audit' ),
-			),
-			__( 'Choose which PDF engine (if any) to use for exports.', 'satori-audit' )
-		);
+                self::add_select_field(
+                        'pdf_engine',
+                        __( 'Engine', 'satori-audit' ),
+                        'satori_audit_section_pdf',
+                        $pdfdiag_page,
+                        array(
+                                'automatic' => __( 'Automatic (TCPDF → DOMPDF fallback)', 'satori-audit' ),
+                                'none'   => __( 'Disabled', 'satori-audit' ),
+                                'dompdf' => __( 'DOMPDF', 'satori-audit' ),
+                                'tcpdf'  => __( 'TCPDF', 'satori-audit' ),
+                        ),
+                        __( 'Automatic (recommended): TCPDF preferred with DOMPDF fallback.', 'satori-audit' )
+                );
 
 		self::add_text_field(
 			'pdf_paper_size',
@@ -527,9 +528,9 @@ class Screen_Settings {
 		echo '<p>' . esc_html__( 'Control how dates, debug sections, and branding appear in HTML/PDF output.', 'satori-audit' ) . '</p>';
 	}
 
-	public static function render_pdf_section_intro(): void {
-		echo '<p>' . esc_html__( 'Configure the PDF engine and core rendering options.', 'satori-audit' ) . '</p>';
-	}
+        public static function render_pdf_section_intro(): void {
+                echo '<p>' . esc_html__( 'Configure the PDF engine and core rendering options (Automatic uses TCPDF with DOMPDF fallback).', 'satori-audit' ) . '</p>';
+        }
 
 	public static function render_diagnostics_section_intro(): void {
 		echo '<p>' . esc_html__( 'Turn on debugging and tune log behaviour for troubleshooting.', 'satori-audit' ) . '</p>';
@@ -860,7 +861,7 @@ class Screen_Settings {
                 }
 
                 if ( array_key_exists( 'pdf_engine', $input ) ) {
-                        $allowed = array( 'none', 'dompdf', 'tcpdf' );
+                        $allowed = array( 'automatic', 'none', 'dompdf', 'tcpdf' );
                         $value   = (string) $input['pdf_engine'];
                         $output['pdf_engine'] = in_array( $value, $allowed, true ) ? $value : $current['pdf_engine'];
                 }

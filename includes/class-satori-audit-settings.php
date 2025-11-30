@@ -70,7 +70,7 @@ class Settings {
                         'pdf_debug_html'                 => 0,
 
                         // PDF engine.
-                        'pdf_engine'                     => 'none',
+                        'pdf_engine'                     => 'automatic',
                         'pdf_paper_size'                 => 'A4',
                         'pdf_orientation'                => 'portrait',
                         'pdf_font_family'                => 'Helvetica',
