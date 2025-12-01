@@ -26,18 +26,21 @@ class PDF {
 	 *
 	 * @param int $report_id Report post ID.
 	 * @return string Full path to generated PDF, or empty string on failure.
-	 */
-	public static function generate_pdf( int $report_id ): string {
-		$settings = self::get_settings();
+        */
+        public static function generate_pdf( int $report_id ): string {
+                $settings = self::get_settings();
 
-		if ( 'none' === $settings['pdf_engine'] ) {
-			self::log( 'PDF generation skipped: engine set to none.', $settings );
-			return '';
-		}
+                ob_start();
 
-		try {
-			$html = Reports::get_report_html( $report_id );
-			$html = self::build_html( $html, $settings );
+                try {
+                        if ( 'none' === $settings['pdf_engine'] ) {
+                                self::log( 'PDF generation skipped: engine set to none.', $settings );
+
+                                return '';
+                        }
+
+                        $html = Reports::get_report_html( $report_id );
+                        $html = self::build_html( $html, $settings );
 
 			/* -------------------------------------------------
 			 * TEMP / DEV: snapshot last HTML sent to PDF engine
@@ -107,21 +110,24 @@ class PDF {
 
 			self::log( 'Generated PDF for report ' . $report_id . ' using ' . strtoupper( (string) $engine['type'] ) . ': ' . $path, $settings );
 
-			return $path;
-		} catch ( \Throwable $e ) {
-			self::log(
-				sprintf(
-					'PDF generation error for report %d (engine: %s): %s',
-					$report_id,
-					$settings['pdf_engine'],
-					$e->getMessage()
-				),
-				$settings
-			);
+                        return $path;
+                } catch ( \Throwable $e ) {
+                        self::log(
+                                sprintf(
+                                        'PDF generation error for report %d (engine: %s): %s',
+                                        $report_id,
+                                        $settings['pdf_engine'],
+                                        $e->getMessage()
+                                ),
+                                $settings,
+                                true
+                        );
 
-			return '';
-		}
-	}
+                        return '';
+                } finally {
+                        self::log_unexpected_output( (string) ob_get_clean(), $settings );
+                }
+        }
 
 	/**
 	 * Ensure report HTML is ready for PDF output.
@@ -542,10 +548,10 @@ class PDF {
 	 * @param string $html Fully assembled HTML document.
 	 * @return void
 	 */
-	private static function dump_last_html( string $html ): void {
-		if ( ! defined( 'WP_DEBUG' ) || ! WP_DEBUG ) {
-			return;
-		}
+        private static function dump_last_html( string $html ): void {
+                if ( ! defined( 'WP_DEBUG' ) || ! WP_DEBUG ) {
+                        return;
+                }
 
 		$upload_dir = wp_upload_dir();
 
@@ -557,19 +563,39 @@ class PDF {
 
 		// Suppress errors – this is a best-effort debug helper.
 		@file_put_contents( $path, $html );
-	}
+        }
 
-	/**
-	 * Log a message when debug mode is enabled.
-	 *
-	 * @param string $message  Message to log.
-	 * @param array  $settings Plugin settings.
-	 * @return void
-	 */
-	private static function log( string $message, array $settings ): void {
-		if ( empty( $settings['debug_mode'] ) ) {
-			return;
-		}
+        /**
+         * Log unexpected buffered output to avoid corrupting PDF binaries.
+         *
+         * @param string $output   Buffered output contents.
+         * @param array  $settings Plugin settings.
+         * @return void
+         */
+        private static function log_unexpected_output( string $output, array $settings ): void {
+                $trimmed = trim( $output );
+
+                if ( '' === $trimmed ) {
+                        return;
+                }
+
+                $snippet = function_exists( 'mb_substr' ) ? mb_substr( $trimmed, 0, 300 ) : substr( $trimmed, 0, 300 );
+
+                self::log( 'Unexpected output during PDF generation: ' . $snippet, $settings, true );
+        }
+
+        /**
+         * Log a message when debug mode is enabled.
+         *
+         * @param string $message  Message to log.
+         * @param array  $settings Plugin settings.
+         * @param bool   $force    Force logging even when debug mode is disabled.
+         * @return void
+         */
+        private static function log( string $message, array $settings, bool $force = false ): void {
+                if ( empty( $settings['debug_mode'] ) && ! $force ) {
+                        return;
+                }
 
 		if ( function_exists( 'satori_audit_log' ) ) {
 			satori_audit_log( $message );
