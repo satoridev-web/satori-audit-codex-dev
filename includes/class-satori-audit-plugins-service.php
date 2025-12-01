@@ -25,40 +25,25 @@ class Plugins_Service {
      * @return array
      */
     public static function get_plugin_update_history( int $report_id = 0 ): array {
-        global $wpdb;
+        $settings = Settings::get_settings();
+        $range    = self::get_date_range( $report_id );
 
-        $table_exists            = self::simple_history_table_exists();
-        $simple_history_detected = self::is_simple_history_active() && $table_exists;
-        $range                   = self::get_date_range( $report_id );
-        $history                 = array();
+        $history = self::build_fallback_history( $report_id );
 
-        if ( $simple_history_detected ) {
-            $history = self::load_simple_history_events( $range );
+        $simple_history_updates = self::get_updates_from_simple_history( $range, $settings );
 
-            self::log_debug(
-                sprintf(
-                    'Simple History detected. Loaded %d update records from %s to %s.',
-                    count( $history ),
-                    $range['from'],
-                    $range['to']
-                )
-            );
-
-            if ( empty( $history ) ) {
-                self::log_debug( 'Simple History returned no plugin updates; falling back to WordPress data.' );
-            }
+        if ( ! empty( $simple_history_updates ) ) {
+            $history = array_merge( $history, $simple_history_updates );
         }
 
-        if ( ! $simple_history_detected || empty( $history ) ) {
-            $history = self::build_fallback_history( $report_id );
-
-            self::log_debug(
-                sprintf(
-                    'Simple History unavailable or empty. Fallback produced %d records.',
-                    count( $history )
-                )
-            );
-        }
+        self::log_debug(
+            sprintf(
+                'Compiled plugin update history for report %d (Simple History mode: %s). Total records: %d.',
+                $report_id,
+                $settings['plugin_update_source'] ?? 'none',
+                count( $history )
+            )
+        );
 
         return $history;
     }
@@ -115,12 +100,13 @@ class Plugins_Service {
     /**
      * Determine if the Simple History table exists.
      */
-    private static function simple_history_table_exists(): bool {
+    private static function simple_history_table_exists( string $table = '' ): bool {
         global $wpdb;
 
-        $table = $wpdb->prefix . 'simple_history';
+        $table_name = ! empty( $table ) ? $table : $wpdb->prefix . 'simple_history';
+        $found      = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name ) );
 
-        return (bool) $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) );
+        return $table_name === $found;
     }
 
     /**
@@ -158,16 +144,80 @@ class Plugins_Service {
     }
 
     /**
-     * Load plugin updates from Simple History events.
+     * Load plugin updates from Simple History events when enabled and schema-compatible.
      */
-    private static function load_simple_history_events( array $range ): array {
+    private static function get_updates_from_simple_history( array $range, array $settings ): array {
+        if ( 'simple_history_safe' !== (string) ( $settings['plugin_update_source'] ?? 'none' ) ) {
+            return array();
+        }
+
         global $wpdb;
 
-        $table = $wpdb->prefix . 'simple_history';
+        if ( ! self::is_simple_history_active() ) {
+            self::log_simple_history( 'Simple History integration skipped: plugin not active.' );
+
+            return array();
+        }
+
+        $table                 = $wpdb->prefix . 'simple_history';
+        $previous_suppression  = $wpdb->suppress_errors( true );
+        $columns               = array();
+        $has_context_column    = false;
+        $selectable_columns    = array( 'date', 'message' );
+
+        if ( ! self::simple_history_table_exists( $table ) ) {
+            $wpdb->suppress_errors( $previous_suppression );
+            self::log_simple_history( 'Simple History integration skipped: table not found: ' . $table );
+
+            return array();
+        }
+
+        $columns = self::get_simple_history_columns( $table );
+
+        if ( empty( $columns ) ) {
+            $wpdb->suppress_errors( $previous_suppression );
+            self::log_simple_history( 'Simple History integration skipped: unable to read columns for ' . $table );
+
+            return array();
+        }
+
+        foreach ( array( 'date', 'message' ) as $required ) {
+            if ( ! in_array( $required, $columns, true ) ) {
+                $wpdb->suppress_errors( $previous_suppression );
+                self::log_simple_history(
+                    'Simple History integration skipped: missing column "' . $required . '" on ' . $table
+                );
+
+                return array();
+            }
+        }
+
+        $has_context_column = in_array( 'context', $columns, true );
+
+        if ( $has_context_column ) {
+            $selectable_columns[] = 'context';
+        }
+
+        $column_list = implode(
+            ', ',
+            array_filter(
+                array_map(
+                    array( self::class, 'wrap_simple_history_column' ),
+                    $selectable_columns
+                )
+            )
+        );
+
+        if ( empty( $column_list ) ) {
+            $wpdb->suppress_errors( $previous_suppression );
+            self::log_simple_history( 'Simple History integration skipped: no selectable columns available.' );
+
+            return array();
+        }
 
         $events = $wpdb->get_results(
             $wpdb->prepare(
-                "SELECT date, context FROM {$table} WHERE action IN (%s, %s, %s) AND date BETWEEN %s AND %s ORDER BY date DESC",
+                "SELECT {$column_list} FROM {$table} WHERE action IN (%s, %s, %s) AND date BETWEEN %s AND %s ORDER BY date DESC",
                 'plugin_updated',
                 'updated',
                 'plugin_update',
@@ -177,29 +227,140 @@ class Plugins_Service {
             ARRAY_A
         );
 
+        $wpdb->suppress_errors( $previous_suppression );
+
         if ( null === $events ) {
-            self::log_debug( 'Failed to query Simple History: ' . $wpdb->last_error );
+            self::log_simple_history( 'Failed to query Simple History: ' . $wpdb->last_error );
+
             return array();
         }
 
         $history = array();
 
         foreach ( $events as $event ) {
-            $context = self::parse_simple_history_context( (string) $event['context'] );
+            $normalized = self::normalize_simple_history_event( $event, $has_context_column );
 
-            if ( empty( $context['plugin'] ) && empty( $context['plugin_name'] ) && empty( $context['plugin_slug'] ) ) {
-                continue;
+            if ( ! empty( $normalized ) ) {
+                $history[] = $normalized;
             }
-
-            $history[] = array(
-                'plugin'      => $context['plugin_name'] ?? $context['plugin'] ?? $context['plugin_slug'],
-                'old_version' => $context['old_version'] ?? $context['version_old'] ?? $context['from_version'] ?? '',
-                'new_version' => $context['new_version'] ?? $context['version_new'] ?? $context['to_version'] ?? '',
-                'date'        => gmdate( 'Y-m-d H:i:s', strtotime( (string) $event['date'] ) ),
-            );
         }
 
+        self::log_simple_history( sprintf( 'Loaded %d plugin update rows from Simple History.', count( $history ) ) );
+
         return $history;
+    }
+
+    /**
+     * Retrieve available columns from the Simple History table.
+     */
+    private static function get_simple_history_columns( string $table ): array {
+        global $wpdb;
+
+        return array_map( 'strval', (array) $wpdb->get_col( "SHOW COLUMNS FROM {$table}" ) );
+    }
+
+    /**
+     * Build a safe column identifier for SELECT clauses.
+     */
+    private static function wrap_simple_history_column( string $column ): string {
+        $allowed = array( 'date', 'message', 'context' );
+
+        return in_array( $column, $allowed, true ) ? '`' . $column . '`' : '';
+    }
+
+    /**
+     * Normalize a Simple History row into the SATORI Audit structure.
+     */
+    private static function normalize_simple_history_event( array $event, bool $has_context ): array {
+        $context_data = array();
+
+        if ( $has_context && isset( $event['context'] ) ) {
+            $context_data = self::parse_simple_history_context( (string) $event['context'] );
+        }
+
+        $message_data = self::parse_simple_history_message( (string) ( $event['message'] ?? '' ) );
+
+        $plugin_name = $context_data['plugin'] ?? $context_data['plugin_name'] ?? '';
+        $old_version = $context_data['old_version'] ?? '';
+        $new_version = $context_data['new_version'] ?? '';
+
+        if ( empty( $plugin_name ) && ! empty( $context_data['plugin_slug'] ) ) {
+            $plugin_name = $context_data['plugin_slug'];
+        }
+
+        if ( empty( $plugin_name ) && ! empty( $message_data['plugin'] ) ) {
+            $plugin_name = $message_data['plugin'];
+        }
+
+        if ( empty( $old_version ) && ! empty( $message_data['old_version'] ) ) {
+            $old_version = $message_data['old_version'];
+        }
+
+        if ( empty( $new_version ) && ! empty( $message_data['new_version'] ) ) {
+            $new_version = $message_data['new_version'];
+        }
+
+        $date_value = $event['date'] ?? '';
+        $date       = '';
+
+        if ( ! empty( $date_value ) ) {
+            $timestamp = strtotime( (string) $date_value );
+
+            if ( false !== $timestamp ) {
+                $date = gmdate( 'Y-m-d H:i:s', $timestamp );
+            }
+        }
+
+        if ( empty( $plugin_name ) ) {
+            return array();
+        }
+
+        return array(
+            'plugin'      => $plugin_name,
+            'old_version' => $old_version,
+            'new_version' => $new_version,
+            'date'        => $date,
+        );
+    }
+
+    /**
+     * Parse a Simple History message column for plugin/version clues.
+     */
+    private static function parse_simple_history_message( string $message ): array {
+        if ( empty( $message ) ) {
+            return array();
+        }
+
+        $normalized = array(
+            'plugin'      => '',
+            'old_version' => '',
+            'new_version' => '',
+        );
+
+        $patterns = array(
+            '/Updated plugin\s+\"?(?P<plugin>[^\"]+)\"?\s+from version\s+(?P<old>[\w\.\-]+)\s+to\s+(?P<new>[\w\.\-]+)/i',
+            '/Plugin\s+\"?(?P<plugin>[^\"]+)\"?\s+was\s+updated\s+from\s+version\s+(?P<old>[\w\.\-]+)\s+to\s+(?P<new>[\w\.\-]+)/i',
+        );
+
+        foreach ( $patterns as $pattern ) {
+            if ( preg_match( $pattern, $message, $matches ) ) {
+                $normalized['plugin']      = $matches['plugin'] ?? '';
+                $normalized['old_version'] = $matches['old'] ?? '';
+                $normalized['new_version'] = $matches['new'] ?? '';
+                break;
+            }
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * Write Simple History-specific log entries.
+     */
+    private static function log_simple_history( string $message ): void {
+        if ( function_exists( 'satori_audit_log' ) ) {
+            satori_audit_log( '[Simple History] ' . $message );
+        }
     }
 
     /**

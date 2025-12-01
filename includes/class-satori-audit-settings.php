@@ -79,6 +79,7 @@ class Settings {
                         'debug_mode'                     => 0,
                         'log_to_file'                    => 0,
                         'log_retention_days'             => '90',
+                        'plugin_update_source'           => 'none',
                 );
         }
 
