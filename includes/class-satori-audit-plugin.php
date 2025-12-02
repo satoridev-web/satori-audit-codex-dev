@@ -117,12 +117,22 @@ class Plugin {
 			Admin::init();
 		}
 
-		// Reports engine bootstrap.
+                // Reports engine bootstrap.
                 add_action(
                         'init',
                         static function () {
                                 if ( class_exists( Reports::class ) && method_exists( Reports::class, 'init' ) ) {
                                         Reports::init();
+                                }
+                        }
+                );
+
+                // Update history storage.
+                add_action(
+                        'init',
+                        static function () {
+                                if ( class_exists( Update_Storage::class ) && method_exists( Update_Storage::class, 'init' ) ) {
+                                        Update_Storage::init();
                                 }
                         }
                 );
