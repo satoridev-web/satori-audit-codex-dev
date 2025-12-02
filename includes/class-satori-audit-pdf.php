@@ -69,44 +69,44 @@ class PDF {
 			$font_family = self::normalise_font_family( $settings['pdf_font_family'] );
 			$path        = self::get_pdf_output_path( $report_id );
 
-			if ( empty( $path ) ) {
-				self::log( 'Failed to determine PDF output path for report ' . $report_id . '.', $settings );
-				return '';
-			}
+                        if ( empty( $path ) ) {
+                                self::log( 'Failed to determine PDF output path for report ' . $report_id . '.', $settings );
+                                return '';
+                        }
 
-			$output = '';
+                        $output = '';
 
-			if ( 'dompdf' === $engine['type'] ) {
-				/** @var Dompdf $dompdf */
-				$dompdf = $engine['instance'];
-				$dompdf->setPaper( $paper, $orientation );
-				$dompdf->loadHtml( $html );
-				$dompdf->render();
+                        if ( 'dompdf' === $engine['type'] ) {
+                                /** @var Dompdf $dompdf */
+                                $dompdf = $engine['instance'];
+                                $dompdf->setPaper( $paper, $orientation );
+                                $dompdf->loadHtml( $html );
+                                $dompdf->render();
 
-				$output = $dompdf->output();
-			} elseif ( 'tcpdf' === $engine['type'] ) {
-				/** @var \TCPDF $tcpdf */
-				$tcpdf        = $engine['instance'];
-				$tcpdf_orient = 'landscape' === $orientation ? 'L' : 'P';
+                                $output = $dompdf->output();
+                        } elseif ( 'tcpdf' === $engine['type'] ) {
+                                /** @var \TCPDF $tcpdf */
+                                $tcpdf        = $engine['instance'];
+                                $tcpdf_orient = 'landscape' === $orientation ? 'L' : 'P';
 
-				$tcpdf->SetFont( $font_family, '', 10 );
-				$tcpdf->AddPage( $tcpdf_orient, $paper );
-				$tcpdf->writeHTML( $html, true, false, true, false, '' );
+                                $tcpdf->SetFont( $font_family, '', 10 );
+                                $tcpdf->AddPage( $tcpdf_orient, $paper );
+                                $tcpdf->writeHTML( $html, true, false, true, false, '' );
 
-				$output = $tcpdf->Output( '', 'S' );
-			}
+                                $output = $tcpdf->Output( '', 'S' );
+                        }
 
-			if ( empty( $output ) ) {
-				self::log( 'PDF generation failed for report ' . $report_id . ': empty engine output.', $settings );
+                        if ( empty( $output ) ) {
+                                self::log( 'PDF generation failed for report ' . $report_id . ': empty engine output.', $settings );
 
-				return '';
-			}
+                                return '';
+                        }
 
-			if ( false === file_put_contents( $path, $output ) ) {
-				self::log( 'Failed to write PDF for report ' . $report_id . ' to ' . $path, $settings );
+                        if ( ! self::write_pdf_file( $path, $output ) ) {
+                                self::log( 'Failed to write PDF for report ' . $report_id . ' to ' . $path, $settings );
 
-				return '';
-			}
+                                return '';
+                        }
 
 			self::log( 'Generated PDF for report ' . $report_id . ' using ' . strtoupper( (string) $engine['type'] ) . ': ' . $path, $settings );
 
@@ -561,8 +561,19 @@ class PDF {
 
 		$path = trailingslashit( $upload_dir['basedir'] ) . 'satori-audit-pdf-last.html';
 
-		// Suppress errors – this is a best-effort debug helper.
-		@file_put_contents( $path, $html );
+                // Suppress errors – this is a best-effort debug helper.
+                @file_put_contents( $path, $html );
+        }
+
+        /**
+         * Write PDF bytes to disk.
+         *
+         * @param string $path  Target file path.
+         * @param string $bytes PDF binary data.
+         * @return bool
+         */
+        private static function write_pdf_file( string $path, string $bytes ): bool {
+                return false !== file_put_contents( $path, $bytes );
         }
 
         /**
