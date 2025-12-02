@@ -49,7 +49,13 @@ class TCPDF {
         }
 
         public function Output( $name = '', $dest = 'I' ) {
-                $content = "%PDF-1.4\\n% Stub TCPDF output\\n" . ( $this->lastHtml ?? '' );
+                $text = isset( $this->lastHtml ) ? $this->lastHtml : '';
+
+                $plain = function_exists( '\\wp_strip_all_tags' ) ? wp_strip_all_tags( $text ) : strip_tags( $text );
+                $plain = trim( (string) $plain );
+                $plain = '' === $plain ? 'SATORI Audit PDF content unavailable.' : $plain;
+
+                $content = $this->build_minimal_pdf( $plain );
 
                 if ( 'S' === $dest ) {
                         return $content;
@@ -58,5 +64,50 @@ class TCPDF {
                 echo $content;
 
                 return $content;
+        }
+
+        /**
+         * Build a minimal but valid PDF payload.
+         *
+         * @param string $text Text to display in the document.
+         * @return string
+         */
+        private function build_minimal_pdf( string $text ): string {
+                $escaped = str_replace(
+                        array( '\\', '(', ')' ),
+                        array( '\\\\', '\\(', '\\)' ),
+                        $text
+                );
+
+                $objects   = array();
+                $objects[] = "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n";
+                $objects[] = "2 0 obj\n<< /Type /Pages /Count 1 /Kids [3 0 R] >>\nendobj\n";
+                $objects[] = "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n";
+
+                $stream    = "BT /F1 12 Tf 72 720 Td ({$escaped}) Tj ET";
+                $length    = strlen( $stream );
+                $objects[] = "4 0 obj\n<< /Length {$length} >>\nstream\n{$stream}\nendstream\nendobj\n";
+                $objects[] = "5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n";
+
+                $pdf     = "%PDF-1.4\n";
+                $offsets = array( 0 );
+
+                foreach ( $objects as $object ) {
+                        $offsets[] = strlen( $pdf );
+                        $pdf      .= $object;
+                }
+
+                $xref_position = strlen( $pdf );
+                $count         = count( $offsets );
+
+                $pdf .= "xref\n0 {$count}\n0000000000 65535 f \n";
+
+                for ( $i = 1; $i < $count; $i++ ) {
+                        $pdf .= sprintf( "%010d 00000 n \n", $offsets[ $i ] );
+                }
+
+                $pdf .= "trailer\n<< /Size {$count} /Root 1 0 R >>\nstartxref\n{$xref_position}\n%%EOF";
+
+                return $pdf;
         }
 }

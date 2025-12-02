@@ -99,17 +99,33 @@ class Reports {
                         $settings
                 );
 
+                ob_start();
+
                 $pdf_path = PDF::generate_pdf( (int) $report_id );
+                $buffer   = ob_get_clean();
+
+                if ( '' !== trim( (string) $buffer ) && function_exists( 'satori_audit_log' ) ) {
+                        $snippet = function_exists( 'mb_substr' ) ? mb_substr( trim( (string) $buffer ), 0, 300 ) : substr( trim( (string) $buffer ), 0, 300 );
+
+                        satori_audit_log( '[PDF] Unexpected output during PDF generation: ' . $snippet );
+                }
 
                 if ( empty( $pdf_path ) || ! file_exists( $pdf_path ) ) {
                         Screen_Settings::log_debug( 'PDF generation failed for report ID ' . $report_id . '.', $settings );
                         self::redirect_with_pdf_error( $redirect_fall );
                 }
 
-                $filename = 'satori-audit-report-' . $report_id . '.pdf';
+                if ( ! is_readable( $pdf_path ) ) {
+                        Screen_Settings::log_debug( 'PDF file is not readable for report ID ' . $report_id . '.', $settings );
+                        self::redirect_with_pdf_error( $redirect_fall );
+                }
+
+                while ( ob_get_level() > 0 ) {
+                        ob_end_clean();
+                }
 
                 header( 'Content-Type: application/pdf' );
-                header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
+                header( 'Content-Disposition: inline; filename="' . basename( $pdf_path ) . '"' );
                 header( 'Content-Length: ' . (string) filesize( $pdf_path ) );
 
                 readfile( $pdf_path );
