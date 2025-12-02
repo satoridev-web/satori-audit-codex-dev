@@ -20,7 +20,7 @@ class Tables {
     /**
      * Database schema version.
      */
-    public const DB_VERSION = '0.1.0';
+    public const DB_VERSION = '0.2.0';
 
     /**
      * Map custom table names onto the $wpdb instance.
@@ -32,6 +32,7 @@ class Tables {
 
         $wpdb->satori_audit_plugins  = $wpdb->prefix . 'satori_audit_plugins';
         $wpdb->satori_audit_security = $wpdb->prefix . 'satori_audit_security';
+        $wpdb->satori_audit_updates  = $wpdb->prefix . 'satori_audit_updates';
     }
 
     /**
@@ -76,6 +77,7 @@ class Tables {
         return match ( $key ) {
             'plugins'  => $wpdb->prefix . 'satori_audit_plugins',
             'security' => $wpdb->prefix . 'satori_audit_security',
+            'updates'  => $wpdb->prefix . 'satori_audit_updates',
             default    => '',
         };
     }
@@ -125,7 +127,22 @@ class Tables {
             ' KEY report_id (report_id)' .
             " ) {$charset_collate};";
 
+        $updates_table_sql = "CREATE TABLE {$wpdb->prefix}satori_audit_updates (\n" .
+            ' id bigint(20) unsigned NOT NULL AUTO_INCREMENT,' .
+            ' plugin_slug varchar(190) NOT NULL,' .
+            ' plugin_name varchar(255) NOT NULL,' .
+            ' previous_version varchar(50) NULL,' .
+            ' new_version varchar(50) NULL,' .
+            ' updated_on datetime NOT NULL,' .
+            " source varchar(20) NOT NULL DEFAULT 'auto'," .
+            ' created_at datetime NOT NULL,' .
+            ' updated_at datetime NOT NULL,' .
+            ' PRIMARY KEY  (id),' .
+            ' KEY plugin_slug (plugin_slug),' .
+            ' KEY updated_on (updated_on)' .
+            " ) {$charset_collate};";
+
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
-        dbDelta( array( $plugin_table_sql, $security_table_sql ) );
+        dbDelta( array( $plugin_table_sql, $security_table_sql, $updates_table_sql ) );
     }
 }

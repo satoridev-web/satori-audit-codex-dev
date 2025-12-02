@@ -482,16 +482,12 @@ class Screen_Settings {
                         __( 'Enable verbose debug logging for SATORI Audit.', 'satori-audit' )
                 );
 
-                self::add_select_field(
-                        'plugin_update_source',
-                        __( 'Plugin Update Source (Simple History)', 'satori-audit' ),
+                self::add_checkbox_field(
+                        'track_update_history_internal',
+                        __( 'Track Update History (Internal)', 'satori-audit' ),
                         'satori_audit_section_diagnostics',
                         $pdfdiag_page,
-                        array(
-                                'none'                => __( 'Disabled', 'satori-audit' ),
-                                'simple_history_safe' => __( 'Simple History (safe)', 'satori-audit' ),
-                        ),
-                        __( 'Select whether to merge plugin updates from Simple History when schema checks pass.', 'satori-audit' )
+                        __( 'Store plugin update history in SATORI Audit without relying on third-party plugins.', 'satori-audit' )
                 );
 
                 self::add_checkbox_field(
@@ -884,12 +880,6 @@ class Screen_Settings {
                         $output['pdf_orientation'] = in_array( $value, $allowed, true ) ? $value : $current['pdf_orientation'];
                 }
 
-                if ( array_key_exists( 'plugin_update_source', $input ) ) {
-                        $allowed = array( 'none', 'simple_history_safe' );
-                        $value   = (string) $input['plugin_update_source'];
-                        $output['plugin_update_source'] = in_array( $value, $allowed, true ) ? $value : 'none';
-                }
-
                 // Checkboxes.
                 $checkboxes = array(
                         'notify_send_on_publish',
@@ -901,6 +891,7 @@ class Screen_Settings {
                         'pdf_debug_html',
                         'debug_mode',
                         'log_to_file',
+                        'track_update_history_internal',
                 );
 
                 foreach ( $checkboxes as $key ) {
